@@ -83,21 +83,21 @@ def test_new_thread_signature():
     from server.tools.tylor import new_thread
     sig = inspect.signature(new_thread)
     assert "name" in sig.parameters
-    assert sig.parameters["name"].annotation == str
+    assert sig.parameters["name"].annotation in (str, "str")
 
 
 def test_switch_thread_signature():
     from server.tools.tylor import switch_thread
     sig = inspect.signature(switch_thread)
     assert "thread_id" in sig.parameters
-    assert sig.parameters["thread_id"].annotation == str
+    assert sig.parameters["thread_id"].annotation in (str, "str")
 
 
 def test_switch_thread_by_name_signature():
     from server.tools.tylor import switch_thread_by_name
     sig = inspect.signature(switch_thread_by_name)
     assert "query" in sig.parameters
-    assert sig.parameters["query"].annotation == str
+    assert sig.parameters["query"].annotation in (str, "str")
 
 
 def test_kill_thread_is_sync():

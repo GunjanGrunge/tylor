@@ -7,6 +7,7 @@ endpoint for real-time thread state updates.
 Architecture: shares the asyncio event loop with FastMCP (started as a
 concurrent task in server/main.py). Never blocks the MCP control plane.
 """
+from __future__ import annotations
 import asyncio
 import errno
 import json

@@ -4,6 +4,7 @@ server/main.py — agent101 FastMCP entry point.
 Starts both FastMCP (stdio transport) and the aiohttp Thread Visualizer
 server concurrently on a single asyncio event loop.
 """
+from __future__ import annotations
 import asyncio
 import logging
 import signal

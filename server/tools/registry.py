@@ -5,6 +5,7 @@ FR36-FR39: load_skill_tools, list_registry.
 Story 4.1 implements built-in ECC category loading. Story 4.2 expands this
 to the full registry client for external skill groups.
 """
+from __future__ import annotations
 import importlib
 import json
 import re

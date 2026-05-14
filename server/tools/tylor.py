@@ -5,6 +5,7 @@ FR1-FR8: new_thread, switch_thread, kill_thread, recall_memory, list_threads.
 Stories 2.3–2.5 implement storage. switch_thread (2.4), kill_thread (2.7),
 recall_memory (2.5) remain stubs until their stories are implemented.
 """
+from __future__ import annotations
 import re
 import asyncio
 import uuid

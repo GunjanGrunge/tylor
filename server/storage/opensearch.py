@@ -7,6 +7,7 @@ through AWS Bedrock, then k-NN search against the agent-memories index.
 Thread isolation is enforced at query time via a term filter on thread_id.
 Facts from other threads are NEVER returned.
 """
+from __future__ import annotations
 import json
 import logging
 import uuid

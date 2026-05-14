@@ -4,6 +4,7 @@ server/tools/personas.py — persona definition loading for agent orchestration.
 Story 3.1 stores personas as structured markdown. This module provides the
 deterministic parser used by Story 3.2 MCP tools.
 """
+from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 

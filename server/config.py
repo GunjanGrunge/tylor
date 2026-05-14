@@ -4,6 +4,7 @@ Reads AWS profile, Bedrock region, and Platform on AWS key.
 Resolution order: env var → ~/.agent101/config.json → .env file → defaults.
 Warns on missing optional config; never crashes on startup.
 """
+from __future__ import annotations
 import json
 import logging
 import os

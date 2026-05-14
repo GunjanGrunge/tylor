@@ -1,4 +1,5 @@
 """server/tools/help.py — agent101 capability discovery."""
+from __future__ import annotations
 
 from server.tools._mcp import mcp
 from server.tools import registry as registry_mod

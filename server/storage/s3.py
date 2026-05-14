@@ -7,6 +7,7 @@ All blobs stored at: s3://{bucket}/{user_id}/threads/{thread_id}/{key}
 Thread isolation: the key path embeds thread_id — cross-thread access
 requires an explicit different thread_id, making accidental bleed impossible.
 """
+from __future__ import annotations
 import logging
 from urllib.parse import urlparse
 

@@ -1,4 +1,5 @@
 """Skill package installer for the /add-skill command."""
+from __future__ import annotations
 import json
 import re
 import shutil

@@ -5,6 +5,7 @@ Zero-infra path: all state is stored in {cwd}/.agent101/threads.json.
 Used when config.json has storage_mode: "project".
 All writes are atomic (write-to-tmp then os.replace).
 """
+from __future__ import annotations
 import json
 import logging
 import os

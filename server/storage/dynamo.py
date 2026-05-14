@@ -13,6 +13,7 @@ Key schema:
 Thread isolation: all SK operations are validated to contain THREAD#{thread_id}.
 Size limit: items >400KB are rejected — use s3.py for large content.
 """
+from __future__ import annotations
 import json
 import logging
 import re

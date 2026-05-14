@@ -1,4 +1,5 @@
 """server/tools/agents.py — Tier 1 agent orchestration MCP tools."""
+from __future__ import annotations
 import uuid
 import re
 
