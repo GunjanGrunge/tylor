@@ -6,6 +6,7 @@ Stories 2.3–2.5 implement storage. switch_thread (2.4), kill_thread (2.7),
 recall_memory (2.5) remain stubs until their stories are implemented.
 """
 from __future__ import annotations
+import os
 import re
 import asyncio
 import uuid
@@ -157,11 +158,20 @@ def new_thread(name: str) -> dict:
     sk = f"THREAD#{thread_id}#META"
     now = _now_iso()
 
+    # Capture current project folder name from Claude Code's PWD env var
+    try:
+        from pathlib import Path as _Path
+        pwd = os.environ.get("PWD") or os.environ.get("CLAUDE_PROJECT_DIR", "")
+        project_name = _Path(pwd).name if pwd else ""
+    except Exception:
+        project_name = ""
+
     written = db.put_item(sk, {
         "Name": name,
         "Status": "active",
         "LastActivity": now,
         "MessageCount": 0,
+        "Project": project_name,
     })
 
     result = {
@@ -342,6 +352,7 @@ def list_threads() -> dict:
             "status": item.get("Status", "active"),
             "last_activity": item.get("LastActivity", item.get("UpdatedAt", "")),
             "message_count": int(item.get("MessageCount", 0)),
+            "project": item.get("Project", ""),
         })
 
     threads.sort(key=lambda t: t["last_activity"], reverse=True)
