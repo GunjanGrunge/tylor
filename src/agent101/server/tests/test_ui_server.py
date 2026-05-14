@@ -56,7 +56,7 @@ class TestRestEndpoints(AioHTTPTestCase):
              "created_at": t["last_activity"], "message_count": t["message_count"]}
             for t in MOCK_THREADS
         ]):
-            from server.ui_server import _make_app
+            from ..ui_server import _make_app
             return _make_app()
 
     async def test_get_threads_returns_json_array(self):
@@ -90,7 +90,7 @@ class TestRestEndpoints(AioHTTPTestCase):
 @pytest.mark.asyncio
 async def test_websocket_initial_payload():
     """Client receives full thread list on connect."""
-    from server.ui_server import _make_app, WsManager
+    from ..ui_server import _make_app, WsManager
     import aiohttp
     from aiohttp.test_utils import TestServer, TestClient
 
@@ -114,10 +114,10 @@ async def test_websocket_initial_payload():
 @pytest.mark.asyncio
 async def test_websocket_broadcast_reaches_all_clients():
     """After broadcast(), all connected clients receive the message."""
-    from server.ui_server import WsManager
+    from ..ui_server import WsManager
     import aiohttp
     from aiohttp.test_utils import TestServer, TestClient
-    from server.ui_server import _make_app
+    from ..ui_server import _make_app
 
     app = _make_app()
 
@@ -131,7 +131,7 @@ async def test_websocket_broadcast_reaches_all_clients():
             await asyncio.wait_for(ws2.receive(), timeout=1.0)
 
             # Broadcast a custom payload
-            from server.ui_server import ws_manager
+            from ..ui_server import ws_manager
             await ws_manager.broadcast({"type": "thread_update", "threads": [{"id": "x1"}]})
 
             msg1 = await asyncio.wait_for(ws1.receive(), timeout=1.0)
@@ -175,7 +175,7 @@ async def test_port_in_use_sets_ui_unavailable():
 @pytest.mark.asyncio
 async def test_ws_manager_drops_closed_clients():
     """WsManager removes clients that fail to receive."""
-    from server.ui_server import WsManager
+    from ..ui_server import WsManager
 
     mgr = WsManager()
 
@@ -194,7 +194,7 @@ async def test_ws_manager_drops_closed_clients():
 @pytest.mark.asyncio
 async def test_ws_manager_sequence_increments():
     """Each broadcast increments the seq counter."""
-    from server.ui_server import WsManager
+    from ..ui_server import WsManager
     import server.ui_server as ui_mod
 
     ui_mod._seq = 0
@@ -230,7 +230,7 @@ FULL_MOCK_THREADS = [
 @pytest.mark.asyncio
 async def test_api_threads_returns_all_five_fields():
     """GET /api/threads returns [{id, title, status, created_at, message_count}]."""
-    from server.ui_server import _make_app
+    from ..ui_server import _make_app
     from aiohttp.test_utils import TestServer, TestClient
 
     app = _make_app()
@@ -252,7 +252,7 @@ async def test_api_threads_returns_all_five_fields():
 @pytest.mark.asyncio
 async def test_api_threads_returns_empty_list_not_null():
     """GET /api/threads with no threads returns [] not null."""
-    from server.ui_server import _make_app
+    from ..ui_server import _make_app
     from aiohttp.test_utils import TestServer, TestClient
 
     app = _make_app()
@@ -268,7 +268,7 @@ async def test_api_threads_returns_empty_list_not_null():
 @pytest.mark.asyncio
 async def test_api_thread_messages_valid_id_returns_array():
     """GET /api/threads/{id}/messages with valid hex id returns array."""
-    from server.ui_server import _make_app
+    from ..ui_server import _make_app
     from aiohttp.test_utils import TestServer, TestClient
 
     app = _make_app()
@@ -290,7 +290,7 @@ async def test_api_thread_messages_valid_id_returns_array():
 @pytest.mark.asyncio
 async def test_api_thread_messages_returns_role_content_timestamp():
     """GET /api/threads/{id}/messages returns [{role, content, timestamp}]."""
-    from server.ui_server import _make_app
+    from ..ui_server import _make_app
     from aiohttp.test_utils import TestServer, TestClient
 
     app = _make_app()
@@ -314,7 +314,7 @@ async def test_api_thread_messages_returns_role_content_timestamp():
 @pytest.mark.asyncio
 async def test_api_thread_messages_before_param_accepted():
     """GET /api/threads/{id}/messages?before=<ts> is accepted (pagination)."""
-    from server.ui_server import _make_app
+    from ..ui_server import _make_app
     from aiohttp.test_utils import TestServer, TestClient
 
     app = _make_app()
@@ -332,7 +332,7 @@ async def test_api_thread_messages_before_param_accepted():
 @pytest.mark.asyncio
 async def test_ws_thread_update_broadcasts_to_all_clients():
     """After a thread state change, all WS clients receive thread_update."""
-    from server.ui_server import _make_app, ws_manager
+    from ..ui_server import _make_app, ws_manager
     from aiohttp.test_utils import TestServer, TestClient
     import server.ui_server as ui_mod
 
@@ -368,7 +368,7 @@ async def test_ws_thread_update_broadcasts_to_all_clients():
 @pytest.mark.asyncio
 async def test_ws_initial_payload_has_thread_update_type():
     """Initial WS payload on connect uses type=thread_update."""
-    from server.ui_server import _make_app
+    from ..ui_server import _make_app
     from aiohttp.test_utils import TestServer, TestClient
 
     app = _make_app()

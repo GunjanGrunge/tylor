@@ -14,7 +14,7 @@ from pathlib import Path
 from mcp.shared.exceptions import McpError
 from mcp.types import ErrorData, INVALID_PARAMS
 
-from server.tools._mcp import mcp
+from ._mcp import mcp
 
 PLUGIN_DIR = Path(__file__).resolve().parents[2]
 REGISTRY_PATH = PLUGIN_DIR / "registry.json"

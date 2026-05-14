@@ -12,7 +12,7 @@ from pathlib import Path
 
 from mcp.server.fastmcp.exceptions import ToolError
 
-from server.tools._mcp import mcp
+from ._mcp import mcp
 
 
 NO_SANDBOX_MESSAGE = "No sandbox configured — run /set-sandbox <path> first"

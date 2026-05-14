@@ -1,9 +1,9 @@
 """server/tools/help.py — agent101 capability discovery."""
 from __future__ import annotations
 
-from server.tools._mcp import mcp
-from server.tools import registry as registry_mod
-from server.tools.personas import list_persona_summaries
+from ._mcp import mcp
+from . import registry as registry_mod
+from .personas import list_persona_summaries
 
 
 SLASH_COMMANDS = [

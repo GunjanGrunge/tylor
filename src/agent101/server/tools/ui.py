@@ -4,11 +4,11 @@ FR43: /open-threads-ui skill calls this tool to open localhost:8765.
 """
 import webbrowser
 
-from server.tools._mcp import mcp
+from ._mcp import mcp
 
 
 def _ui_url() -> str:
-    from server.ui_server import PORT
+    from ..ui_server import PORT
     return f"http://localhost:{PORT}"
 
 
@@ -18,7 +18,7 @@ def open_threads_ui() -> str:
     Open the TYLOR Thread Visualizer in the system default browser.
     Returns a confirmation message, or a warning if the UI server is unavailable.
     """
-    from server.ui_server import ui_available
+    from ..ui_server import ui_available
 
     url = _ui_url()
     if not ui_available:

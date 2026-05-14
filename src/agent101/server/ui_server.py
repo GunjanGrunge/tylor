@@ -79,7 +79,7 @@ ws_manager = WsManager()
 def _fetch_threads() -> list[dict]:
     """Fetch current thread list from storage. Returns [] on any error."""
     try:
-        from server.tools.tylor import list_threads
+        from .tools.tylor import list_threads
         result = list_threads()
         raw = result.get("threads", [])
         return [
@@ -100,8 +100,8 @@ def _fetch_threads() -> list[dict]:
 def _fetch_messages(thread_id: str, limit: int = 50) -> list[dict]:
     """Fetch the last `limit` messages for a thread. Returns [] on any error."""
     try:
-        from server.config import config
-        from server.storage.dynamo import DynamoClient
+        from . import config
+        from .storage.dynamo import DynamoClient
 
         db = DynamoClient(
             table_name=config.get("dynamo_table", "agent101"),

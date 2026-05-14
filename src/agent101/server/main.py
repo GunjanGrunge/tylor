@@ -10,19 +10,19 @@ import logging
 import signal
 import sys
 
-from server.tools._mcp import mcp  # noqa: F401
+from .tools._mcp import mcp  # noqa: F401
 
 # Register @mcp.tool() decorators (side effects)
-import server.tools.tylor     # noqa: F401, E402
-import server.tools.agents    # noqa: F401, E402
-import server.tools.registry  # noqa: F401, E402
-import server.tools.skill_installer  # noqa: F401, E402
-import server.tools.help      # noqa: F401, E402
-import server.tools.executor  # noqa: F401, E402
-import server.tools.ui        # noqa: F401, E402
+from .tools import tylor     # noqa: F401, E402
+from .tools import agents    # noqa: F401, E402
+from .tools import registry  # noqa: F401, E402
+from .tools import skill_installer  # noqa: F401, E402
+from .tools import help      # noqa: F401, E402
+from .tools import executor  # noqa: F401, E402
+from .tools import ui        # noqa: F401, E402
 
 # Load config at startup (emits warnings for missing optional keys)
-import server.config  # noqa: F401, E402
+from . import config  # noqa: F401, E402
 
 logger = logging.getLogger(__name__)
 

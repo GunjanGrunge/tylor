@@ -27,7 +27,7 @@ CT Gemma Fine-Tuning  → new thread, clean slate
 
 ## Installation
 
-**Requirements:** macOS or Linux, Python 3.8+, Claude Code
+\*\*Requirements:\*\* macOS or Linux, Python 3.8+, Claude Code, pip
 
 ### One-line install
 

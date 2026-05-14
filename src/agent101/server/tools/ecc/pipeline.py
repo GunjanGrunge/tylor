@@ -1,5 +1,5 @@
 """ECC pipeline tools."""
-from server.tools._mcp import mcp
+from .._mcp import mcp
 
 
 @mcp.tool()

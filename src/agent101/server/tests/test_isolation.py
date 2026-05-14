@@ -6,10 +6,10 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-PLUGIN_DIR = Path(__file__).parent.parent.parent
+PLUGIN_DIR = Path(__file__).parent.parent.parent.parent.parent
 sys.path.insert(0, str(PLUGIN_DIR))
 
-from server.storage.dynamo import DynamoClient
+from agent101.server.storage.dynamo import DynamoClient
 
 
 def test_switch_thread_does_not_touch_message_items():

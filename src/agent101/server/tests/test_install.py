@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-PLUGIN_DIR = Path(__file__).parent.parent.parent
+PLUGIN_DIR = Path(__file__).parent.parent.parent.parent.parent
 
 
 # ---------------------------------------------------------------------------
@@ -17,11 +17,11 @@ PLUGIN_DIR = Path(__file__).parent.parent.parent
 # ---------------------------------------------------------------------------
 
 def test_requirements_txt_exists():
-    assert (PLUGIN_DIR / "server" / "requirements.txt").exists()
+    assert (PLUGIN_DIR / "src" / "agent101" / "server" / "requirements.txt").exists()
 
 
 def test_requirements_txt_contains_all_packages():
-    content = (PLUGIN_DIR / "server" / "requirements.txt").read_text()
+    content = (PLUGIN_DIR / "src" / "agent101" / "server" / "requirements.txt").read_text()
     required = ["mcp", "boto3", "opensearch-py", "rapidfuzz", "aiohttp", "anthropic", "python-dotenv"]
     missing = [p for p in required if p not in content]
     assert not missing, f"Missing packages: {missing}"
@@ -58,7 +58,7 @@ def test_registry_json_not_overwritten_when_present(tmp_path):
 
 def test_server_main_importable():
     result = subprocess.run(
-        [sys.executable, "-c", "import sys; sys.path.insert(0, '.'); from server.main import mcp; print(mcp.name)"],
+        [sys.executable, "-c", "import sys; sys.path.insert(0, '.'); from agent101.server.main import mcp; print(mcp.name)"],
         cwd=str(PLUGIN_DIR),
         capture_output=True,
         text=True,
@@ -125,7 +125,7 @@ _sys.path.insert(0, str(PLUGIN_DIR))
 import os
 from unittest.mock import MagicMock, patch
 
-from server.validate import (
+from agent101.server.validate import (
     check_bedrock,
     check_dynamodb,
     check_opensearch,
@@ -306,7 +306,7 @@ def test_run_all_is_advisory(tmp_path, capsys):
 # ---------------------------------------------------------------------------
 # Story 1.3: DynamoDB Table & S3 Bucket Provisioning
 # ---------------------------------------------------------------------------
-from server.provision import (
+from agent101.server.provision import (
     provision_dynamodb,
     provision_s3,
     run_all as provision_run_all,
@@ -468,7 +468,7 @@ def test_provision_run_all_success(tmp_path):
 # ---------------------------------------------------------------------------
 # Story 1.5: OpenSearch Index Provisioning
 # ---------------------------------------------------------------------------
-from server.provision_opensearch import provision_index, run_all as opensearch_run_all
+from agent101.server.provision_opensearch import provision_index, run_all as opensearch_run_all
 
 
 # --- AC1: Index absent → created ---

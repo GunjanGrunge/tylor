@@ -6,8 +6,8 @@ import re
 from mcp.shared.exceptions import McpError
 from mcp.types import ErrorData, INVALID_PARAMS
 
-from server.tools.personas import list_persona_summaries, load_persona
-from server.tools._mcp import mcp
+from .personas import list_persona_summaries, load_persona
+from ._mcp import mcp
 
 _AGENT_ID_RE   = re.compile(r"^[a-zA-Z0-9_-]+$")
 _THREAD_ID_RE  = re.compile(r"^[a-f0-9]{32}$")  # uuid4().hex format
@@ -18,13 +18,13 @@ def _invalid_params(message: str) -> McpError:
 
 
 def _get_db():
-    from server.tools.tylor import _get_db as get_thread_db
+    from .tylor import _get_db as get_thread_db
 
     return get_thread_db()
 
 
 def _get_memory_client():
-    from server.tools.tylor import _get_memory_client as get_thread_memory_client
+    from .tylor import _get_memory_client as get_thread_memory_client
 
     return get_thread_memory_client()
 

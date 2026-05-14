@@ -2,7 +2,7 @@
 from pathlib import Path
 
 
-UI_HTML = Path(__file__).parent.parent.parent / "ui" / "index.html"
+UI_HTML = Path(__file__).parent.parent.parent.parent / "ui" / "index.html"
 
 
 def _html() -> str:

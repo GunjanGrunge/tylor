@@ -13,9 +13,9 @@ from datetime import datetime, timezone
 
 from mcp.server.fastmcp.exceptions import ToolError
 
-from server.tools._mcp import mcp
-from server.tools.summarizer import summarize_thread
-from server.tools.thread_resolver import resolve_thread_name
+from ._mcp import mcp
+from .summarizer import summarize_thread
+from .thread_resolver import resolve_thread_name
 
 
 # ---------------------------------------------------------------------------
@@ -28,7 +28,7 @@ _broadcast_tasks: set = set()  # holds task refs to prevent GC before completion
 def _broadcast_thread_update() -> None:
     """Fire-and-forget WebSocket broadcast after any thread state change."""
     try:
-        from server.ui_server import ws_manager, thread_update_payload, ui_available
+        from ..ui_server import ws_manager, thread_update_payload, ui_available
         if not ui_available or ws_manager.count == 0:
             return
         loop = asyncio.get_running_loop()
@@ -42,7 +42,7 @@ def _broadcast_thread_update() -> None:
 
 
 async def _do_broadcast() -> None:
-    from server.ui_server import ws_manager, thread_update_payload
+    from ..ui_server import ws_manager, thread_update_payload
     payload = await thread_update_payload()
     await ws_manager.broadcast(payload)
 
