@@ -31,25 +31,46 @@ No database. No cloud account. No configuration. Just install and go.
 
 ## Installation
 
-**Requirements:** [Claude Code](https://claude.ai/code) · Python 3.8+
+**Requirements:** Python 3.8+ · One of: Claude Code CLI, Claude Desktop, or VSCode with Claude extension
 
-### Step 1 — Clone the plugin
+Works on **macOS, Windows, Linux, and WSL**.
+
+### Step 1 — Clone the repo
 
 ```bash
 git clone https://github.com/GunjanGrunge/tylor ~/.claude/plugins/GunjanGrunge/tylor
 ```
 
-Claude Code automatically discovers plugins placed in `~/.claude/plugins/`. No marketplace registration needed.
+### Step 2 — Run the installer
 
-On first use, it creates a Python virtual environment at `~/.tylor/venv` and installs dependencies. This takes about 30 seconds and only happens once.
+```bash
+python3 ~/.claude/plugins/GunjanGrunge/tylor/install.py
+```
 
-### Step 2 — Restart Claude Code
+The installer automatically:
+- Creates a Python virtual environment at `~/.tylor/venv`
+- Installs all dependencies
+- Patches **Claude Code CLI** (`~/.claude/settings.json`)
+- Patches **Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json` on Mac, `%APPDATA%\Claude\` on Windows)
+- VSCode extension uses the same config as Claude Code CLI — no extra step needed
 
-Quit and reopen Claude Code to load the MCP server.
+You should see:
+```
+  ✓ Python environment ready
+  ✓ Storage mode: Project (local JSON, no AWS needed)
+  ✓ Patched ~/.claude/settings.json
+  ✓ Patched ~/Library/Application Support/Claude/claude_desktop_config.json
+  ✓ MCP server validates correctly (name: agent101)
+  ✓ Tylor installed successfully!
+```
 
-### Step 3 — Verify
+### Step 3 — Restart your Claude client
 
-Open any project and run:
+Quit and reopen Claude Code, Claude Desktop, or VSCode.
+
+### Step 4 — Verify
+
+Type in any Claude session:
 
 ```
 /help-agent101
@@ -63,24 +84,24 @@ You should see the full command listing. If you see it — Tylor is running.
 
 **`/help-agent101` not found after restart**
 
-1. Restart Claude Code completely (quit, reopen)
-2. Confirm the plugin was cloned: `ls ~/.claude/plugins/GunjanGrunge/tylor`
-3. Check Claude Code settings → MCP servers → confirm `agent101` appears
-4. If missing, re-clone: `git clone https://github.com/GunjanGrunge/tylor ~/.claude/plugins/GunjanGrunge/tylor`
+1. Re-run the installer: `python3 ~/.claude/plugins/GunjanGrunge/tylor/install.py`
+2. Restart your Claude client completely
+3. Check the MCP server is listed in your client's settings under MCP servers
 
-**Python not found / server fails to start**
+**Python not found**
 
-Tylor requires Python 3.8+. Verify:
-
-```bash
-python3 --version
-```
-
+Tylor requires Python 3.8+. Check: `python3 --version`
 If missing, install from [python.org](https://python.org) and restart your terminal.
 
-**First session takes longer than expected**
+**Windows: use `python` instead of `python3`**
 
-Normal — the first run installs Python dependencies into `~/.tylor/venv`. Subsequent starts are instant.
+```
+python %USERPROFILE%\.claude\plugins\GunjanGrunge\tylor\install.py
+```
+
+**First session takes longer**
+
+Normal — first run installs Python dependencies. Subsequent starts are instant.
 
 ---
 
