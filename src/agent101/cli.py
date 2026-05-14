@@ -53,8 +53,8 @@ def install_server_config() -> bool:
     servers = settings.setdefault("mcpServers", {})
     servers["agent101"] = {
         "command": sys.executable,
-        "args": [str(server_script)],
-        "cwd": str(package_root),
+        "args": [server_script.as_posix()],
+        "cwd": package_root.as_posix(),
     }
     print("✓ MCP server registered in settings.json")
 
@@ -69,13 +69,13 @@ def install_server_config() -> bool:
             existing.append(config)
             print(f"✓ {event} hook registered")
 
-    _add_hook("SessionStart", {"command": str(hooks_dir / "session-start.sh")})
-    _add_hook("Stop",         {"command": str(hooks_dir / "session-checkpoint.sh")})
+    _add_hook("SessionStart", {"command": (hooks_dir / "session-start.sh").as_posix()})
+    _add_hook("Stop",         {"command": (hooks_dir / "session-checkpoint.sh").as_posix()})
     _add_hook("PostToolUse",  {"matcher": "kill_thread",
-                                "command": str(hooks_dir / "kill-thread-trigger.sh")})
+                                "command": (hooks_dir / "kill-thread-trigger.sh").as_posix()})
     for matcher in ("Read", "Write", "Edit", "MultiEdit"):
         _add_hook("PostToolUse", {"matcher": matcher,
-                                   "command": str(hooks_dir / "post-tool-use-code-index.sh")})
+                                   "command": (hooks_dir / "post-tool-use-code-index.sh").as_posix()})
 
     settings_file.write_text(json.dumps(settings, indent=2))
     return True
@@ -95,7 +95,7 @@ def install_storage_config(storage_mode: str = "project") -> None:
 
     if storage_mode == "project":
         config["storage_mode"] = "project"
-        config["storage_path"] = str(config_dir / "threads.json")
+        config["storage_path"] = (config_dir / "threads.json").as_posix()
         print("✓ Storage mode: Project (local JSON, zero AWS setup)")
     else:
         config["storage_mode"] = "personal"
@@ -115,11 +115,13 @@ def install_registry() -> None:
 def validate_server() -> bool:
     """Quick smoke-test: can Python import the server module?"""
     package_root = get_package_root()
-    server_script = package_root / "server" / "main.py"
+
+    # Use forward slashes to avoid Windows backslash unicode escape issues
+    path_str = package_root.as_posix()
 
     result = subprocess.run(
         [sys.executable, "-c",
-         f"import sys; sys.path.insert(0,'{package_root}'); "
+         f"import sys; sys.path.insert(0,r'{path_str}'); "
          f"from agent101.server.tools._mcp import mcp; "
          f"assert mcp.name == 'agent101', mcp.name"],
         capture_output=True, text=True
