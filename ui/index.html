@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>TYLOR — Thread Visualizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<style>
+:root {
+  --bg:      #070714;
+  --font:    'JetBrains Mono', monospace;
+  --c-active:  #00ffb3;
+  --c-await:   #fbbf24;
+  --c-run:     #a78bfa;
+  --c-idle:    rgba(200,210,255,0.5);
+  --c-killed:  rgba(239,80,80,0.7);
+  --c-project: rgba(255,255,255,0.9);
+  --c-claude:  rgba(210,168,84,0.95);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);font-family:var(--font)}
+
+/* ── Chrome ── */
+#chrome{
+  position:fixed;top:0;left:0;right:0;height:54px;z-index:20;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 24px;
+  background:rgba(7,7,20,0.8);
+  backdrop-filter:blur(16px);
+  border-bottom:1px solid rgba(255,255,255,0.06);
+}
+.wm-logo{
+  font-size:32px;font-weight:700;
+  color:transparent;
+  -webkit-text-stroke:1.6px rgba(139,92,246,1);
+  filter:drop-shadow(0 0 5px rgba(139,92,246,0.8)) drop-shadow(0 0 14px rgba(139,92,246,0.35));
+  letter-spacing:-1px;
+}
+#chrome-right{display:flex;align-items:center;gap:20px}
+#legend{display:flex;gap:14px;align-items:center}
+.leg{display:flex;align-items:center;gap:5px;font-size:9.5px;color:rgba(255,255,255,0.5);letter-spacing:.05em}
+.leg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+#tc{font-size:11px;color:rgba(255,255,255,0.35);letter-spacing:.06em}
+#tc b{font-size:22px;font-weight:700;color:rgba(160,120,255,0.9);display:block;line-height:1;
+  filter:drop-shadow(0 0 6px rgba(139,92,246,0.6))}
+
+/* ── SVG canvas ── */
+#viz{position:fixed;top:54px;left:0;right:0;bottom:36px;z-index:1;background:transparent}
+
+/* ── Detail panel ── */
+#panel{
+  position:fixed;top:54px;right:0;bottom:36px;width:360px;z-index:15;
+  background:rgba(15,15,35,0.82);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  border-left:1px solid rgba(139,92,246,0.3);
+  display:flex;flex-direction:column;
+  transform:translateX(100%);
+  transition:transform 250ms ease-out;
+  pointer-events:none;
+}
+#panel.open{transform:translateX(0);pointer-events:all}
+
+.ph{
+  padding:18px 20px 14px;flex-shrink:0;
+  border-bottom:1px solid rgba(139,92,246,0.12);
+}
+.ph-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px}
+.ph-title{font-size:14px;font-weight:700;color:rgba(255,255,255,0.95);line-height:1.3;flex:1}
+.ph-close{
+  background:none;border:none;color:rgba(255,255,255,0.35);
+  font-family:var(--font);font-size:18px;cursor:pointer;line-height:1;
+  padding:2px 4px;border-radius:4px;transition:color .15s;flex-shrink:0;
+}
+.ph-close:hover{color:rgba(255,255,255,0.9)}
+.ph-meta{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.ph-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;border:1px solid;
+}
+.ph-ts{font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:.03em}
+
+/* Load earlier button */
+#load-earlier{
+  flex-shrink:0;margin:10px 20px 0;
+  background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.22);
+  border-radius:8px;padding:7px 14px;font-size:10px;font-weight:600;
+  color:rgba(200,170,255,0.85);font-family:var(--font);
+  cursor:pointer;letter-spacing:.06em;transition:background .15s;
+  display:none;
+}
+#load-earlier:hover{background:rgba(139,92,246,0.16)}
+
+/* Messages list */
+#msgs{
+  flex:1;overflow-y:auto;padding:12px 20px 16px;
+  display:flex;flex-direction:column;gap:10px;
+  scrollbar-width:thin;scrollbar-color:rgba(139,92,246,0.2) transparent;
+}
+#msgs::-webkit-scrollbar{width:3px}
+#msgs::-webkit-scrollbar-thumb{background:rgba(139,92,246,0.22);border-radius:2px}
+
+/* Message items */
+.msg{display:flex;flex-direction:column;gap:4px;opacity:1;transition:opacity .2s}
+.msg-head{display:flex;align-items:center;gap:7px}
+.role-chip{
+  font-size:8.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  padding:1px 7px;border-radius:8px;
+}
+.role-user{background:rgba(0,255,179,0.1);color:rgba(0,255,179,0.85);border:1px solid rgba(0,255,179,0.25)}
+.role-assistant{background:rgba(139,92,246,0.1);color:rgba(180,140,255,0.85);border:1px solid rgba(139,92,246,0.25)}
+.role-tool{background:rgba(251,191,36,0.1);color:rgba(251,191,36,0.85);border:1px solid rgba(251,191,36,0.25)}
+.msg-ts{font-size:9.5px;color:rgba(255,255,255,0.25)}
+.msg-body{
+  font-size:11.5px;line-height:1.6;color:rgba(255,255,255,0.65);
+  padding-left:10px;border-left:1.5px solid rgba(255,255,255,0.07);
+}
+.msg-body.role-user-body{border-color:rgba(0,255,179,0.18)}
+.msg-body.role-assistant-body{border-color:rgba(139,92,246,0.2)}
+.msg-body p{margin:0 0 4px}
+.msg-body code{font-family:var(--font);font-size:10.5px;
+  background:rgba(139,92,246,0.1);padding:1px 5px;border-radius:3px}
+.msg-body pre{background:rgba(0,0,0,0.3);border-radius:6px;padding:8px;
+  overflow-x:auto;margin:4px 0}
+.msg-sep{height:1px;background:rgba(139,92,246,0.07);flex-shrink:0}
+
+/* Content cross-fade */
+#msgs.fading{opacity:0;transition:opacity 100ms}
+#msgs.fading-in{opacity:1;transition:opacity 150ms}
+
+/* Responsive: full-width below 900px */
+@media(max-width:900px){
+  #panel{width:100%;border-left:none;border-top:1px solid rgba(139,92,246,0.3)}
+}
+
+/* ── Node labels ── */
+.node-label{
+  font-family:var(--font);
+  pointer-events:none;
+  dominant-baseline:middle;
+}
+
+/* ── Tooltip ── */
+#tip{
+  position:fixed;z-index:30;display:none;pointer-events:none;
+  background:rgba(8,8,22,0.95);backdrop-filter:blur(20px);
+  border:1px solid rgba(139,92,246,0.3);border-radius:8px;
+  padding:10px 14px;font-size:11px;font-family:var(--font);
+  color:rgba(255,255,255,0.75);max-width:220px;
+}
+#tip strong{color:#fff;font-size:12px;display:block;margin-bottom:4px}
+#tip .tr{display:flex;justify-content:space-between;gap:12px;margin-top:2px}
+#tip .tl{color:rgba(255,255,255,0.35);font-size:9.5px;text-transform:uppercase;letter-spacing:.06em}
+
+/* ── Health ── */
+#health{
+  position:fixed;bottom:8px;right:16px;z-index:20;
+  display:flex;align-items:center;gap:5px;
+  font-size:9.5px;font-family:var(--font);color:rgba(255,255,255,0.3);
+}
+.hdot{width:6px;height:6px;border-radius:50%;animation:hb 2.8s ease-in-out infinite}
+@keyframes hb{0%,100%{opacity:.5}50%{opacity:1}}
+@keyframes ring-pulse{0%{transform:translate(-50%,-50%) scale(1);opacity:.45}100%{transform:translate(-50%,-50%) scale(1.8);opacity:0}}
+.hdot.ok{background:var(--c-active);box-shadow:0 0 6px rgba(0,255,179,0.5)}
+.hdot.warn{background:var(--c-await)}
+.hdot.err{background:rgba(239,68,68,0.9);animation:none}
+
+/* ── Project switcher ── */
+#switcher{
+  position:fixed;bottom:8px;left:50%;transform:translateX(-50%);z-index:20;
+  display:flex;gap:6px;
+  background:rgba(10,10,28,0.85);backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:4px 6px;
+}
+.sp{
+  padding:4px 12px;border-radius:14px;font-size:9.5px;font-weight:600;
+  letter-spacing:.08em;text-transform:uppercase;cursor:pointer;
+  border:1px solid transparent;color:rgba(255,255,255,0.4);background:transparent;
+  font-family:var(--font);transition:all .2s;
+}
+.sp:hover{color:rgba(255,255,255,0.7);border-color:rgba(255,255,255,0.15)}
+.sp.on{background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.28);color:rgba(255,255,255,0.92)}
+.sp-dot{display:inline-block;width:5px;height:5px;border-radius:50%;margin-right:5px;vertical-align:middle}
+</style>
+</head>
+<body>
+
+<!-- Chrome -->
+<div id="chrome">
+  <div class="wm-logo">Tylor</div>
+  <div id="chrome-right">
+    <div id="legend">
+      <div class="leg"><div class="leg-dot" style="background:var(--c-active);box-shadow:0 0 5px rgba(0,255,179,0.6)"></div>active</div>
+      <div class="leg"><div class="leg-dot" style="background:var(--c-await);box-shadow:0 0 5px rgba(251,191,36,0.6)"></div>awaiting</div>
+      <div class="leg"><div class="leg-dot" style="background:var(--c-run)"></div>running</div>
+      <div class="leg"><div class="leg-dot" style="background:rgba(200,210,255,0.45)"></div>idle</div>
+      <div class="leg"><div class="leg-dot" style="background:var(--c-killed)"></div>killed</div>
+    </div>
+    <div id="tc"><b id="tc-n">0</b><span id="tc-l">threads</span></div>
+  </div>
+</div>
+
+<!-- Main SVG -->
+<svg id="viz" style="background:transparent"></svg>
+
+<!-- Tooltip -->
+<div id="tip">
+  <strong id="tip-title"></strong>
+  <div class="tr"><span class="tl">project</span><span id="tip-proj"></span></div>
+  <div class="tr"><span class="tl">status</span><span id="tip-status"></span></div>
+  <div class="tr"><span class="tl">messages</span><span id="tip-msgs"></span></div>
+</div>
+
+<!-- Detail panel -->
+<div id="panel">
+  <div class="ph">
+    <div class="ph-top">
+      <div class="ph-title" id="panel-title">Thread</div>
+      <button class="ph-close" id="panel-close" onclick="closePanel()">×</button>
+    </div>
+    <div class="ph-meta">
+      <span class="ph-badge" id="panel-badge"></span>
+      <span class="ph-ts" id="panel-ts"></span>
+    </div>
+  </div>
+  <button id="load-earlier" onclick="loadEarlier()">↑ Load earlier messages</button>
+  <div id="msgs"></div>
+</div>
+
+<!-- Project switcher -->
+<div id="switcher"></div>
+
+<!-- Health -->
+<div id="health"><div class="hdot ok" id="hdot"></div><span id="hmsg">connected</span></div>
+
+<script>
+// ── Constants ─────────────────────────────────
+const API = 'http://localhost:8765';
+const WS  = 'ws://localhost:8765/ws/threads';
+
+const STATUS_COLOR = {
+  active:   '#00ffb3',
+  awaiting: '#fbbf24',
+  running:  '#a78bfa',
+  idle:     'rgba(200,210,255,0.55)',
+  killed:   'rgba(239,80,80,0.75)',
+};
+const STATUS_GLOW = {
+  active:   '0 0 14px rgba(0,255,179,0.5), 0 0 28px rgba(0,255,179,0.2)',
+  awaiting: '0 0 12px rgba(251,191,36,0.45)',
+  running:  '0 0 10px rgba(167,139,250,0.35)',
+  idle:     'none',
+  killed:   '0 0 10px rgba(239,80,80,0.3)',
+};
+
+// ── SVG setup ─────────────────────────────────
+const svgEl = document.getElementById('viz');
+const W = window.innerWidth, H = window.innerHeight - 54 - 36;
+svgEl.setAttribute('width', W);
+svgEl.setAttribute('height', H);
+svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+const svg = d3.select('#viz');
+
+// Defs: gradients, filters
+const defs = svg.append('defs');
+
+// Glow filter for links
+const glowF = defs.append('filter').attr('id','link-glow').attr('x','-50%').attr('y','-50%').attr('width','200%').attr('height','200%');
+glowF.append('feGaussianBlur').attr('stdDeviation','2').attr('result','b');
+const fm = glowF.append('feMerge');
+fm.append('feMergeNode').attr('in','b');
+fm.append('feMergeNode').attr('in','SourceGraphic');
+
+// Node glow filter
+const nodeF = defs.append('filter').attr('id','node-glow').attr('x','-80%').attr('y','-80%').attr('width','360%').attr('height','360%');
+nodeF.append('feGaussianBlur').attr('stdDeviation','4').attr('result','b');
+const fm2 = nodeF.append('feMerge');
+fm2.append('feMergeNode').attr('in','b');
+fm2.append('feMergeNode').attr('in','SourceGraphic');
+
+// Layer order: links first, then nodes
+const linkG  = svg.append('g').attr('class','links');
+const nodeG  = svg.append('g').attr('class','nodes');
+const labelG = svg.append('g').attr('class','labels');
+
+// ── Sparkle background ────────────────────────
+const bgCanvas = document.createElement('canvas');
+bgCanvas.style.cssText = 'position:fixed;top:54px;left:0;z-index:0;pointer-events:none';
+bgCanvas.width = W; bgCanvas.height = H;
+document.body.insertBefore(bgCanvas, document.getElementById('viz'));
+const bgCtx = bgCanvas.getContext('2d');
+const STARS = Array.from({length:90},()=>({
+  x:Math.random()*W, y:Math.random()*H,
+  vx:(Math.random()-.5)*.18, vy:(Math.random()-.5)*.18,
+  r:Math.random()*1.2+.3, ph:Math.random()*Math.PI*2
+}));
+function drawBg(now=0){
+  bgCtx.clearRect(0,0,W,H);
+  STARS.forEach(s=>{
+    s.x+=s.vx; s.y+=s.vy; s.ph+=.008;
+    if(s.x<0||s.x>W) s.vx*=-1;
+    if(s.y<0||s.y>H) s.vy*=-1;
+  });
+  for(let i=0;i<STARS.length;i++) for(let j=i+1;j<STARS.length;j++){
+    const dx=STARS[i].x-STARS[j].x, dy=STARS[i].y-STARS[j].y, d=Math.sqrt(dx*dx+dy*dy);
+    if(d<100){
+      bgCtx.beginPath();bgCtx.moveTo(STARS[i].x,STARS[i].y);bgCtx.lineTo(STARS[j].x,STARS[j].y);
+      bgCtx.strokeStyle=`rgba(80,50,180,${.12*(1-d/100)})`;bgCtx.lineWidth=.5;bgCtx.stroke();
+    }
+  }
+  STARS.forEach(s=>{
+    const tw=(Math.sin(s.ph)+1)*.5;
+    bgCtx.beginPath();bgCtx.arc(s.x,s.y,s.r*(0.6+tw*.8),0,Math.PI*2);
+    bgCtx.fillStyle=`rgba(140,90,240,${0.28+tw*.45})`;bgCtx.fill();
+  });
+  requestAnimationFrame(drawBg);
+}
+drawBg();
+
+// ── State ─────────────────────────────────────
+let projects = [];
+let activeProjectId = null;
+let simulation = null;
+let graphNodes = [];  // D3 nodes: [{id, type:'claude'|'project'|'thread', ...}]
+let graphLinks = [];  // D3 links: [{source, target, type}]
+
+const PROJECT_COLORS = ['#64b4ff','#b4ff8c','#ffb464'];
+
+// ── Claude logo node ──────────────────────────
+function drawClaudeNode(cx, cy){
+  // Draw via canvas on the bg — just use the SVG center node
+  const g = nodeG.append('g').attr('class','claude-node').attr('transform',`translate(${cx},${cy})`);
+  // Outer glow rings
+  [80,60,44].forEach((r,i)=>{
+    g.append('circle').attr('r',r)
+      .attr('fill','none')
+      .attr('stroke',`rgba(255,255,255,${[0.04,0.07,0.12][i]})`)
+      .attr('stroke-width',1)
+      .style('animation',`ring-pulse ${3+i*.8}s ease-out infinite ${i*.5}s`);
+  });
+  // Disc
+  g.append('circle').attr('r',38)
+    .attr('fill','rgba(10,10,28,0.95)')
+    .attr('stroke','rgba(255,255,255,0.35)')
+    .attr('stroke-width',1.5)
+    .style('filter','drop-shadow(0 0 20px rgba(255,255,255,0.3)) drop-shadow(0 0 40px rgba(255,255,255,0.12))');
+  // Logo (canvas-drawn amber)
+  const fo = g.append('foreignObject').attr('x',-22).attr('y',-22).attr('width',44).attr('height',44);
+  const c = fo.append('xhtml:canvas').attr('width',44).attr('height',44)
+    .style('display','block').node();
+  const lc = c.getContext('2d');
+  const img = new Image();
+  img.onload = ()=>{lc.drawImage(img,0,0,44,44);lc.globalCompositeOperation='source-atop';lc.fillStyle='rgba(255,255,255,0.95)';lc.fillRect(0,0,44,44);lc.globalCompositeOperation='source-over'};
+  img.onerror = ()=>{lc.font='bold 28px serif';lc.fillStyle='rgba(255,255,255,0.9)';lc.textAlign='center';lc.textBaseline='middle';lc.fillText('✦',22,22)};
+  img.src='claude-logo.png';
+  return g;
+}
+
+// ── Build graph from projects ─────────────────
+// Pre-seeds node positions so simulation starts clean, not from random chaos.
+function buildGraph(){
+  graphNodes = [{ id:'__claude__', type:'claude', label:'Claude', fx: W/2, fy: H/2 }];
+  graphLinks = [];
+
+  const np = Math.min(projects.length, 3);
+  // Hub angles: evenly spread around Claude (120° apart for 3 projects)
+  const hubAngles = np === 1 ? [0]
+    : np === 2 ? [-Math.PI/2, Math.PI/2]
+    : [-Math.PI/2, Math.PI/6, Math.PI*5/6];
+
+  projects.forEach((proj, pi)=>{
+    const projId  = `proj_${proj.id}`;
+    const hAngle  = hubAngles[pi] || (pi * 2*Math.PI/np);
+    const hubDist = Math.min(W, H) * 0.30;
+
+    // Pre-seed hub position
+    const hx = W/2 + hubDist * Math.cos(hAngle);
+    const hy = H/2 + hubDist * Math.sin(hAngle);
+
+    graphNodes.push({ id:projId, type:'project', label:proj.name,
+      projectIdx:pi, projectId:proj.id, x:hx, y:hy });
+    graphLinks.push({ source:'__claude__', target:projId, type:'hub' });
+
+    const alive = proj.threads.filter(t=>t.status!=='killed');
+    const killed = proj.threads.filter(t=>t.status==='killed');
+    const threadDist = Math.min(W, H) * 0.18;
+    const totalThreads = alive.length + (killed.length ? 1 : 0);
+
+    alive.forEach((t, ti)=>{
+      // Fan threads around the hub, evenly spread in a 200° arc
+      const arc = Math.min(Math.PI * 1.1, totalThreads * 0.35);
+      const tAngle = hAngle + (arc/2) - (totalThreads > 1 ? (arc * ti/(totalThreads-1)) : 0);
+      graphNodes.push({
+        id:`thr_${t.id}`, type:'thread', label:t.title,
+        status:t.status, thread:t, projectIdx:pi, projectId:proj.id,
+        x: hx + threadDist * Math.cos(tAngle),
+        y: hy + threadDist * Math.sin(tAngle),
+      });
+      graphLinks.push({ source:projId, target:`thr_${t.id}`, type:'thread' });
+    });
+
+    if(killed.length){
+      const kId = `killed_${proj.id}`;
+      // Position killed group opposite the hub from Claude
+      const kAngle = hAngle + Math.PI * 0.6;
+      graphNodes.push({
+        id:kId, type:'killed-group', label:`✕ ${killed.length} killed`,
+        killed, projectIdx:pi, projectId:proj.id,
+        x: hx + threadDist * Math.cos(kAngle),
+        y: hy + threadDist * Math.sin(kAngle),
+      });
+      graphLinks.push({ source:projId, target:kId, type:'killed' });
+    }
+  });
+}
+
+// ── Render ────────────────────────────────────
+function render(){
+  buildGraph();
+
+  const activeIdx = projects.findIndex(p=>p.id===activeProjectId);
+
+  // ── Simulation ──
+  if(simulation) simulation.stop();
+
+  // Scale link distances based on total node count — more nodes need more room
+  const threadCount = graphNodes.filter(n=>n.type==='thread').length;
+  const distScale = Math.max(1, Math.min(1.6, 1 + threadCount * 0.025));
+
+  simulation = d3.forceSimulation(graphNodes)
+    .force('link', d3.forceLink(graphLinks).id(d=>d.id)
+      .distance(d=>{
+        if(d.type==='hub')    return 200 * distScale;
+        if(d.type==='killed') return 150 * distScale;
+        return 140 * distScale;
+      })
+      .strength(0.75))
+    .force('charge', d3.forceManyBody()
+      .strength(d=>{
+        if(d.type==='claude') return -1200;
+        if(d.type==='project') return -500;
+        return -280;
+      }))
+    .force('collide', d3.forceCollide()
+      .radius(d=>{
+        if(d.type==='claude') return 90;   // hard exclusion zone around Claude
+        if(d.type==='project') return 80;
+        const sf = Math.max(0.7, 1 - threadCount * 0.012);
+        return Math.round(62 * sf);
+      }).strength(1.0).iterations(4))
+    .force('center', d3.forceCenter(W/2, H/2).strength(0.03))
+    .force('bounds', ()=>{
+      const cx = W/2, cy = H/2;
+      graphNodes.forEach(n=>{
+        if(n.type==='claude') return;
+        const r = n.type==='project' ? 70 : 56;
+        // Keep within viewport
+        n.x = Math.max(r+8, Math.min(W-r-8, n.x||W/2));
+        n.y = Math.max(r+8, Math.min(H-r-8, n.y||H/2));
+        // Push away from Claude center — minimum 120px clearance
+        const dx = n.x - cx, dy = n.y - cy;
+        const dist = Math.sqrt(dx*dx + dy*dy)||1;
+        const minDist = 120;
+        if(dist < minDist){
+          const scale = minDist / dist;
+          n.x = cx + dx * scale;
+          n.y = cy + dy * scale;
+        }
+      });
+    })
+    .alphaDecay(0.04)    // settle faster
+    .velocityDecay(0.4)  // more damping = less jitter after settle
+    .on('tick', ticked);
+
+  // ── Draw silk thread paths (bezier with live wave physics) ──
+  linkG.selectAll('*').remove();
+
+  // Each link gets a unique id for animateMotion mpath references
+  graphLinks.forEach((d,i)=>{ d._idx = i; d._phase = Math.random()*Math.PI*2; });
+
+  const link = linkG.selectAll('path.silk').data(graphLinks).enter()
+    .append('path').attr('class','silk')
+    .attr('id', d=>`silk-${d._idx}`)
+    .attr('fill','none')
+    .attr('stroke', d=>{
+      if(d.type==='hub'){
+        const pi = graphNodes.find(n=>n.id===d.target.id||n.id===d.target)?.projectIdx??0;
+        return PROJECT_COLORS[pi%PROJECT_COLORS.length];
+      }
+      if(d.type==='killed') return 'rgba(239,80,80,0.6)';
+      const tn = graphNodes.find(n=>n.id===d.target.id||n.id===d.target);
+      return STATUS_COLOR[tn?.status] || 'rgba(200,200,255,0.35)';
+    })
+    .attr('stroke-width', d=>d.type==='hub' ? 2.2 : 1.4)
+    .attr('stroke-dasharray', d=>d.type==='killed' ? '5 3' : null)
+    .attr('stroke-linecap','round')
+    .attr('opacity', d=>{
+      const tId = typeof d.target==='object' ? d.target.id : d.target;
+      const tn = graphNodes.find(n=>n.id===tId);
+      const isAP = tn?.projectId === activeProjectId;
+      if(d.type==='hub') return isAP ? 0.88 : 0.28;
+      return isAP ? 0.7 : 0.18;
+    })
+    .attr('filter', d=>d.type==='hub' ? 'url(#link-glow)' : null);
+
+  // Traveling dot along each silk thread
+  const dots = linkG.selectAll('circle.dot').data(graphLinks.filter(d=>d.type!=='killed')).enter()
+    .append('circle').attr('class','dot')
+    .attr('r', d=>d.type==='hub' ? 3 : 2)
+    .attr('fill', d=>{
+      if(d.type==='hub'){
+        const pi = graphNodes.find(n=>n.id===d.target.id||n.id===d.target)?.projectIdx??0;
+        return PROJECT_COLORS[pi%PROJECT_COLORS.length];
+      }
+      const tn = graphNodes.find(n=>n.id===d.target.id||n.id===d.target);
+      return STATUS_COLOR[tn?.status]||'rgba(200,200,255,0.5)';
+    })
+    .attr('opacity', d=>{
+      const tId = typeof d.target==='object' ? d.target.id : d.target;
+      const tn = graphNodes.find(n=>n.id===tId);
+      return tn?.projectId===activeProjectId ? 0.85 : 0.2;
+    });
+
+  // Kick off animateMotion on each dot
+  dots.each(function(d){
+    const dur = 3 + d._idx * 0.4 % 4;
+    d3.select(this).append('animateMotion')
+      .attr('dur', `${dur}s`)
+      .attr('begin', `${-(d._idx * 0.55)}s`)
+      .attr('repeatCount','indefinite')
+      .append('mpath')
+      .attr('href', `#silk-${d._idx}`);
+  });
+
+  // ── Draw nodes ──
+  nodeG.selectAll('*').remove();
+  labelG.selectAll('*').remove();
+
+  // Claude first
+  const claudeNode = graphNodes.find(n=>n.type==='claude');
+  drawClaudeNode(claudeNode.x||W/2, claudeNode.y||H/2);
+
+  // Project and thread nodes
+  const nonClaude = graphNodes.filter(n=>n.type!=='claude');
+  const nodeEl = nodeG.selectAll('g.node').data(nonClaude).enter()
+    .append('g').attr('class','node')
+    .attr('transform', d=>`translate(${d.x||W/2},${d.y||H/2})`)
+    .style('cursor','pointer')
+    .on('click', (e,d)=>{
+      e.stopPropagation();
+      if(d.type==='thread'){
+        openPanel(d.thread.id, d.thread);
+      } else if(d.type==='killed-group'){
+        // Show aggregate info for killed group — no messages, just info
+        openPanel(`killed_${d.projectId}`, {
+          title:`${d.killed.length} Killed Threads`,
+          status:'killed',
+          created_at: d.killed[0]?.created_at,
+        });
+      } else if(d.projectId && d.projectId !== activeProjectId){
+        setActiveProject(d.projectId);
+      }
+    })
+    .on('mouseenter', (e,d)=>showTip(e,d))
+    .on('mousemove', moveTip)
+    .on('mouseleave', hideTip)
+    .call(d3.drag()
+      .on('start', (e,d)=>{ if(!e.active) simulation.alphaTarget(0.2).restart(); d.fx=d.x; d.fy=d.y; })
+      .on('drag',  (e,d)=>{ d.fx=e.x; d.fy=e.y; })
+      .on('end',   (e,d)=>{ if(!e.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+  nodeEl.each(function(d){
+    const g = d3.select(this);
+    const isActiveProj = d.projectId === activeProjectId;
+    const alpha = isActiveProj ? 1 : 0.45;
+    const col = PROJECT_COLORS[d.projectIdx%PROJECT_COLORS.length];
+
+    if(d.type==='project'){
+      // Project hub: circle + pill label below (never bleeds)
+      g.append('circle').attr('r',28)
+        .attr('fill','rgba(10,10,28,0.92)')
+        .attr('stroke',col).attr('stroke-width',2)
+        .attr('opacity',alpha)
+        .style('filter',isActiveProj ? `drop-shadow(0 0 14px ${col}99) drop-shadow(0 0 28px ${col}44)` : 'none');
+      // Center dot
+      g.append('circle').attr('r',6).attr('fill',col).attr('opacity',alpha*0.9);
+      // Label pill BELOW the circle — fixed width, never bleeds
+      const lw = 100, lh = 22;
+      g.append('rect').attr('x',-lw/2).attr('y',34).attr('width',lw).attr('height',lh)
+        .attr('rx',11).attr('fill','rgba(10,10,28,0.88)')
+        .attr('stroke',col).attr('stroke-width',1).attr('opacity',alpha*0.85);
+      g.append('text').attr('text-anchor','middle').attr('x',0).attr('y',34+lh/2+1)
+        .attr('dominant-baseline','middle')
+        .attr('fill',col).attr('font-size','9.5px').attr('font-weight','700')
+        .attr('font-family','JetBrains Mono,monospace').attr('letter-spacing','.06em')
+        .attr('opacity',alpha)
+        .text(d.label.length>13 ? d.label.slice(0,12)+'…' : d.label);
+
+    } else if(d.type==='thread'){
+      const sc = STATUS_COLOR[d.status]||'rgba(200,200,255,0.5)';
+      // Shrink nodes slightly when many threads — keeps labels readable
+      const sizeFactor = Math.max(0.7, 1 - threadCount * 0.012);
+      const r = Math.round((d.status==='active' ? 22 : 18) * sizeFactor);
+      g.append('circle').attr('r',r)
+        .attr('fill',`rgba(10,10,28,0.88)`)
+        .attr('stroke',sc)
+        .attr('stroke-width', d.status==='active'?2:1.2)
+        .attr('opacity',alpha)
+        .style('filter',isActiveProj && STATUS_GLOW[d.status]!=='none'
+          ? `drop-shadow(0 0 8px ${sc}99)` : 'none');
+      // Status dot
+      g.append('circle').attr('r',4).attr('cx',0).attr('cy',0)
+        .attr('fill',sc).attr('opacity',alpha*0.9);
+      // Label below
+      labelG.append('text')
+        .attr('x',(d.x||W/2)).attr('y',(d.y||H/2)+r+12)
+        .attr('text-anchor','middle').attr('fill','rgba(255,255,255,0.7)')
+        .attr('font-size','9.5px').attr('font-family','JetBrains Mono,monospace')
+        .attr('opacity',isActiveProj ? 0.85 : 0.3)
+        .attr('class',`lbl lbl-${d.id}`)
+        .text(d.label.length>18 ? d.label.slice(0,17)+'…' : d.label);
+
+    } else if(d.type==='killed-group'){
+      g.append('circle').attr('r',20)
+        .attr('fill','rgba(30,6,6,0.9)')
+        .attr('stroke','rgba(239,80,80,0.55)')
+        .attr('stroke-width',1.2)
+        .attr('stroke-dasharray','3 2')
+        .attr('opacity',alpha);
+      g.append('text').attr('text-anchor','middle').attr('dominant-baseline','middle')
+        .attr('fill','rgba(255,140,140,0.85)').attr('font-size','9px').attr('font-weight','700')
+        .attr('font-family','JetBrains Mono,monospace').attr('opacity',alpha)
+        .text(d.label);
+    }
+  });
+
+  let _t = 0; // time counter for wave animation
+
+  function silkD(d, t){
+    const sx = d.source.x, sy = d.source.y;
+    const ex = d.target.x, ey = d.target.y;
+    const dx = ex-sx, dy = ey-sy;
+    const dist = Math.sqrt(dx*dx+dy*dy)||1;
+    // Perpendicular unit vector
+    const px = -dy/dist, py = dx/dist;
+    // Wave amplitude: hub links bigger, thread links smaller
+    const baseAmp = d.type==='hub' ? 28 : 16;
+    const amp = Math.sin(t*0.9 + (d._phase||0)) * baseAmp;
+    const c1x = sx + dx*0.3 + px*amp;
+    const c1y = sy + dy*0.3 + py*amp;
+    const c2x = sx + dx*0.7 - px*amp*0.7;
+    const c2y = sy + dy*0.7 - py*amp*0.7;
+    return `M${sx},${sy} C${c1x},${c1y} ${c2x},${c2y} ${ex},${ey}`;
+  }
+
+  function ticked(){
+    _t += 0.012;
+    // Update Claude node position
+    const cn = graphNodes.find(n=>n.type==='claude');
+    svg.select('.claude-node').attr('transform',`translate(${cn.x},${cn.y})`);
+
+    // Update silk thread paths with live wave
+    link.attr('d', d => silkD(d, _t));
+
+    // Update non-claude nodes
+    nodeEl.attr('transform',d=>`translate(${d.x},${d.y})`);
+
+    // Update labels
+    graphNodes.filter(n=>n.type==='thread').forEach(d=>{
+      labelG.select(`.lbl-${d.id}`)
+        .attr('x',d.x).attr('y',d.y + (d.status==='active'?22:18) + 14);
+    });
+  }
+
+  // Update switcher
+  renderSwitcher();
+  updateCounter();
+}
+
+// ── Smooth project switch (no full rebuild) ───
+function setActiveProject(id){
+  if(id === activeProjectId) return;
+  activeProjectId = id;
+
+  const T = 400; // transition duration ms
+
+  // Fade links in/out
+  linkG.selectAll('path.silk')
+    .transition().duration(T).ease(d3.easeCubicInOut)
+    .attr('opacity', d=>{
+      const tId = typeof d.target==='object' ? d.target.id : d.target;
+      const tn  = graphNodes.find(n=>n.id===tId);
+      const isAP = tn?.projectId === activeProjectId;
+      if(d.type==='hub') return isAP ? 0.88 : 0.28;
+      return isAP ? 0.7 : 0.18;
+    });
+
+  // Fade dot opacity
+  linkG.selectAll('circle.dot')
+    .transition().duration(T).ease(d3.easeCubicInOut)
+    .attr('opacity', d=>{
+      const tId = typeof d.target==='object' ? d.target.id : d.target;
+      const tn  = graphNodes.find(n=>n.id===tId);
+      return tn?.projectId===activeProjectId ? 0.85 : 0.15;
+    });
+
+  // Scale up active project hub, scale down others
+  nodeG.selectAll('g.node')
+    .transition().duration(T).ease(d3.easeBackOut.overshoot(1.4))
+    .attr('opacity', d=> d.projectId===activeProjectId ? 1 : 0.38)
+    .attr('transform', d=>{
+      const scale = d.projectId===activeProjectId ? 1 : 0.82;
+      return `translate(${d.x},${d.y}) scale(${scale})`;
+    });
+
+  // Fade labels
+  labelG.selectAll('text')
+    .transition().duration(T).ease(d3.easeCubicInOut)
+    .attr('opacity', d=>{
+      // d here is bound to thread graphNodes
+      if(!d) return 0.3;
+      return d.projectId===activeProjectId ? 0.85 : 0.2;
+    });
+
+  // Tiny nudge — just enough to jiggle into place without a full re-layout
+  if(simulation) simulation.alpha(0.06).restart();
+
+  renderSwitcher();
+  updateCounter();
+}
+
+// ── Tooltip ───────────────────────────────────
+const tip = document.getElementById('tip');
+function showTip(e,d){
+  if(d.type==='claude') return;
+  if(d.type==='project'){
+    document.getElementById('tip-title').textContent = d.label;
+    document.getElementById('tip-proj').textContent = 'project hub';
+    document.getElementById('tip-status').textContent = `${d.killed?.length||0} killed + ${graphNodes.filter(n=>n.projectId===d.projectId&&n.type==='thread').length} active`;
+    document.getElementById('tip-msgs').textContent = '—';
+  } else if(d.type==='thread'){
+    document.getElementById('tip-title').textContent = d.thread.title;
+    document.getElementById('tip-proj').textContent = projects.find(p=>p.id===d.projectId)?.name||'';
+    document.getElementById('tip-status').textContent = d.status;
+    document.getElementById('tip-msgs').textContent = d.thread.message_count;
+  } else if(d.type==='killed-group'){
+    document.getElementById('tip-title').textContent = `${d.killed.length} killed threads`;
+    document.getElementById('tip-proj').textContent = projects.find(p=>p.id===d.projectId)?.name||'';
+    document.getElementById('tip-status').textContent = 'killed';
+    document.getElementById('tip-msgs').textContent = d.killed.reduce((s,t)=>s+t.message_count,0);
+  }
+  tip.style.display='block';
+  moveTip(e);
+}
+function moveTip(e){
+  let x=e.clientX+14, y=e.clientY-10;
+  if(x+240>window.innerWidth) x=e.clientX-254;
+  if(y+120>window.innerHeight) y=window.innerHeight-130;
+  tip.style.left=x+'px'; tip.style.top=y+'px';
+}
+function hideTip(){ tip.style.display='none'; }
+
+// ── Project switcher ──────────────────────────
+function renderSwitcher(){
+  const el = document.getElementById('switcher');
+  el.innerHTML='';
+  if(projects.length<=1){el.style.display='none';return;}
+  el.style.display='flex';
+  projects.forEach((p,i)=>{
+    const btn = document.createElement('button');
+    btn.className='sp'+(p.id===activeProjectId?' on':'');
+    btn.innerHTML=`<span class="sp-dot" style="background:${PROJECT_COLORS[i%PROJECT_COLORS.length]}"></span>${p.name}`;
+    btn.title=`/SwProject ${p.id}`;
+    btn.addEventListener('click',()=>setActiveProject(p.id));
+    el.appendChild(btn);
+  });
+}
+
+function updateCounter(){
+  const ap = projects.find(p=>p.id===activeProjectId);
+  const n = ap ? ap.threads.length : 0;
+  document.getElementById('tc-n').textContent = n;
+  document.getElementById('tc-l').textContent = n===1?'thread':'threads';
+}
+
+// ── Detail Panel ─────────────────────────────
+let panelThreadId = null;
+let panelOldestTs = null;
+let panelHasMore  = false;
+
+const BADGE_STYLE = {
+  active:   'color:#00ffb3;border-color:rgba(0,255,179,0.35);background:rgba(0,255,179,0.08)',
+  awaiting: 'color:#fbbf24;border-color:rgba(251,191,36,0.35);background:rgba(251,191,36,0.08)',
+  running:  'color:#a78bfa;border-color:rgba(167,139,250,0.35);background:rgba(167,139,250,0.08)',
+  idle:     'color:rgba(200,210,255,0.7);border-color:rgba(200,210,255,0.2);background:rgba(200,210,255,0.05)',
+  killed:   'color:rgba(239,120,120,0.85);border-color:rgba(239,80,80,0.3);background:rgba(239,80,80,0.07)',
+};
+
+function roleClass(role){
+  if(role==='user')      return 'role-user';
+  if(role==='assistant') return 'role-assistant';
+  return 'role-tool';
+}
+
+function fmtTs(ts){
+  if(!ts) return '';
+  try { return new Date(ts).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); }
+  catch { return ts.slice(0,16).replace('T',' '); }
+}
+
+function renderMessages(msgs, prepend=false){
+  const container = document.getElementById('msgs');
+  const frag = document.createDocumentFragment();
+  msgs.forEach((m,i)=>{
+    if(i>0){const sep=document.createElement('div');sep.className='msg-sep';frag.appendChild(sep);}
+    const div = document.createElement('div');
+    div.className='msg';
+    const rc = roleClass(m.role||'tool');
+    const bodyClass = `msg-body role-${(m.role||'tool')}-body`;
+    // Sanitize: strip script/event-handler attributes to prevent stored XSS
+    function sanitize(html){
+      const t=document.createElement('template');
+      t.innerHTML=html;
+      t.content.querySelectorAll('script,iframe,object,embed').forEach(el=>el.remove());
+      t.content.querySelectorAll('*').forEach(el=>{
+        [...el.attributes].forEach(a=>{if(/^on/i.test(a.name)||a.name==='href'&&/^javascript/i.test(a.value))el.removeAttribute(a.name)});
+      });
+      const d=document.createElement('div');d.appendChild(t.content);return d.innerHTML;
+    }
+    const raw = (typeof marked!=='undefined' && m.content)
+      ? marked.parse(String(m.content), {breaks:true, gfm:true})
+      : `<p>${String(m.content||'').replace(/</g,'&lt;')}</p>`;
+    const md = sanitize(raw);
+    div.innerHTML=`
+      <div class="msg-head">
+        <span class="role-chip ${rc}">${m.role||'tool'}</span>
+        <span class="msg-ts">${fmtTs(m.timestamp)}</span>
+      </div>
+      <div class="${bodyClass}">${md}</div>`;
+    frag.appendChild(div);
+  });
+  if(prepend && container.firstChild) container.insertBefore(frag, container.firstChild);
+  else container.appendChild(frag);
+}
+
+async function openPanel(threadId, threadData){
+  const isSwitch = panelThreadId && panelThreadId !== threadId;
+  panelThreadId  = threadId;
+  panelOldestTs  = null;
+  panelHasMore   = false;
+
+  // Populate header
+  const title  = threadData?.title || threadData?.name || threadId;
+  const status = threadData?.status || 'idle';
+  document.getElementById('panel-title').textContent = title;
+  const badge = document.getElementById('panel-badge');
+  badge.textContent = status;
+  badge.style.cssText = BADGE_STYLE[status] || BADGE_STYLE.idle;
+  document.getElementById('panel-ts').textContent = fmtTs(threadData?.created_at);
+
+  const msgs = document.getElementById('msgs');
+
+  if(isSwitch){
+    // Cross-fade: fade out, swap, fade in
+    msgs.classList.add('fading');
+    await new Promise(r=>setTimeout(r,100));
+    msgs.innerHTML='';
+    msgs.classList.remove('fading');
+  } else {
+    msgs.innerHTML='';
+  }
+
+  // Skip message fetch for synthetic group IDs (killed groups, etc.)
+  if(threadId.startsWith('killed_')){
+    msgs.innerHTML='<div style="padding:20px;color:rgba(239,120,120,0.6);font-size:11px">Archived threads — no live messages.</div>';
+    document.getElementById('panel').classList.add('open');
+    return;
+  }
+
+  // Fetch messages
+  try{
+    const res  = await fetch(`${API}/api/threads/${threadId}/messages`);
+    const data = await res.json();
+    if(Array.isArray(data) && data.length>0){
+      panelOldestTs = data[0].timestamp;
+      panelHasMore  = data.length >= 50;
+      renderMessages(data);
+      msgs.scrollTop = msgs.scrollHeight;
+    } else {
+      msgs.innerHTML='<div style="padding:20px;color:rgba(255,255,255,0.3);font-size:11px">No messages yet.</div>';
+    }
+  } catch(e){
+    msgs.innerHTML='<div style="padding:20px;color:rgba(255,255,255,0.3);font-size:11px">Could not load messages.</div>';
+  }
+
+  document.getElementById('load-earlier').style.display = panelHasMore ? 'block' : 'none';
+
+  // Slide in
+  document.getElementById('panel').classList.add('open');
+  msgs.classList.add('fading-in');
+  setTimeout(()=>msgs.classList.remove('fading-in'), 200);
+}
+
+async function loadEarlier(){
+  if(!panelThreadId || !panelOldestTs) return;
+  const btn = document.getElementById('load-earlier');
+  btn.textContent = '↑ Loading…';
+  btn.disabled = true;
+  try{
+    const url = `${API}/api/threads/${panelThreadId}/messages?before=${encodeURIComponent(panelOldestTs)}`;
+    const res  = await fetch(url);
+    const data = await res.json();
+    if(Array.isArray(data) && data.length>0){
+      panelOldestTs = data[0].timestamp;
+      panelHasMore  = data.length >= 50;
+      const msgs = document.getElementById('msgs');
+      const prevH = msgs.scrollHeight;
+      renderMessages(data, true); // prepend
+      msgs.scrollTop = msgs.scrollHeight - prevH; // keep scroll position
+    } else {
+      panelHasMore = false;
+    }
+  } catch(e){ /* silent */ }
+  btn.textContent = '↑ Load earlier messages';
+  btn.disabled = false;
+  document.getElementById('load-earlier').style.display = panelHasMore ? 'block' : 'none';
+}
+
+function closePanel(){
+  document.getElementById('panel').classList.remove('open');
+  panelThreadId = null;
+}
+
+// Close on outside click
+document.addEventListener('click', e=>{
+  const panel = document.getElementById('panel');
+  if(panel.classList.contains('open') && !panel.contains(e.target)){
+    // Only close if click is not on the SVG nodes (those handle their own click)
+    if(!e.target.closest('#viz')) closePanel();
+  }
+});
+
+// ── Data ──────────────────────────────────────
+// ── Smart diff apply ──────────────────────────
+// First call: full render. Subsequent calls: diff and update in-place.
+let _initialRenderDone = false;
+
+function applyData(data){
+  let incoming;
+  if(data.projects)                           incoming = data.projects.slice(0,3);
+  else if(Array.isArray(data) && data.length) incoming = [{ id:'default', name:'agent101', threads:data }];
+  else return;
+
+  const newProjects = incoming.map(p=>({...p, threads: p.threads||[]}));
+
+  // First load — always full render
+  if(!_initialRenderDone){
+    projects = newProjects;
+    if(!activeProjectId||!projects.find(p=>p.id===activeProjectId))
+      activeProjectId = projects[0]?.id||null;
+    render();
+    _initialRenderDone = true;
+    return;
+  }
+
+  // Subsequent WS updates — smart diff
+  let changed = false;
+
+  newProjects.forEach(np=>{
+    const existing = projects.find(p=>p.id===np.id);
+    if(!existing){
+      // New project — full rebuild needed
+      projects = newProjects;
+      activeProjectId = activeProjectId||projects[0]?.id||null;
+      render();
+      changed = false; // render() already handled everything
+      return;
+    }
+
+    // Diff threads
+    np.threads.forEach(nt=>{
+      const et = existing.threads.find(t=>t.id===nt.id);
+      if(!et){
+        // New thread — add node with entrance animation
+        existing.threads.push({...nt, _isNew:true});
+        changed = true;
+      } else if(et.status !== nt.status){
+        // Status changed — update in place
+        et.status = nt.status;
+        et.title  = nt.title || et.title;
+        et.message_count = nt.message_count ?? et.message_count;
+        changed = true;
+        updateNodeStatus(et);
+      }
+    });
+
+    // Removed threads — exit animation then remove
+    existing.threads.filter(et=>!np.threads.find(nt=>nt.id===et.id))
+      .forEach(et=>{ removeNodeAnimated(et.id); existing.threads = existing.threads.filter(t=>t.id!==et.id); changed=true; });
+  });
+
+  if(changed) applyDiff();
+}
+
+function updateNodeStatus(thread){
+  // Update node visuals in-place — no rebuild
+  const nId = `thr_${thread.id}`;
+  const node = graphNodes.find(n=>n.id===nId);
+  if(!node) return;
+  node.status = thread.status;
+
+  const sc = STATUS_COLOR[thread.status]||'rgba(200,200,255,0.5)';
+  const r  = thread.status==='active' ? 22 : 18;
+
+  nodeG.selectAll('g.node').filter(d=>d.id===nId)
+    .selectAll('circle:first-child')
+    .transition().duration(300)
+    .attr('stroke', sc)
+    .attr('r', r);
+
+  // Update silk thread color
+  linkG.selectAll('path.silk').filter(d=>{
+    const tId = typeof d.target==='object' ? d.target.id : d.target;
+    return tId === nId;
+  })
+    .transition().duration(300)
+    .attr('stroke', sc)
+    .attr('opacity', thread.projectId===activeProjectId ? 0.7 : 0.18);
+}
+
+function removeNodeAnimated(threadId){
+  const nId = `thr_${threadId}`;
+  nodeG.selectAll('g.node').filter(d=>d.id===nId)
+    .transition().duration(300).ease(d3.easeCubicIn)
+    .attr('transform', d=>`translate(${d.x},${d.y}) scale(0.1)`)
+    .style('opacity',0)
+    .remove();
+  linkG.selectAll('path.silk').filter(d=>{
+    const tId = typeof d.target==='object' ? d.target.id : d.target;
+    return tId === nId;
+  }).transition().duration(300).attr('opacity',0).remove();
+  labelG.select(`.lbl-${threadId}`).transition().duration(300).attr('opacity',0).remove();
+  graphNodes = graphNodes.filter(n=>n.id!==nId);
+  graphLinks = graphLinks.filter(l=>{
+    const tId = typeof l.target==='object' ? l.target.id : l.target;
+    return tId !== nId;
+  });
+}
+
+function applyDiff(){
+  // Add new nodes with entrance animation
+  projects.forEach(proj=>{
+    proj.threads.filter(t=>t._isNew).forEach(t=>{
+      delete t._isNew;
+      // Find parent hub position for initial placement
+      const hub = graphNodes.find(n=>n.id===`proj_${proj.id}`);
+      const angle = Math.random()*Math.PI*2;
+      const newNode = {
+        id:`thr_${t.id}`, type:'thread', label:t.title,
+        status:t.status, thread:t, projectIdx:projects.indexOf(proj), projectId:proj.id,
+        x:(hub?.x||W/2)+80*Math.cos(angle),
+        y:(hub?.y||H/2)+80*Math.sin(angle),
+      };
+      graphNodes.push(newNode);
+      graphLinks.push({ source:`proj_${proj.id}`, target:`thr_${t.id}`, type:'thread' });
+
+      // Add DOM node with entrance animation
+      const isActive = proj.id===activeProjectId;
+      const sc = STATUS_COLOR[t.status]||'rgba(200,200,255,0.5)';
+      const nodeEl = nodeG.append('g').attr('class','node')
+        .attr('transform',`translate(${newNode.x},${newNode.y}) scale(0.5)`)
+        .style('opacity','0')
+        .style('cursor','pointer')
+        .on('click',(e,d)=>{ e.stopPropagation(); openPanel(t.id, t); })
+        .on('mouseenter',(e)=>showTip(e,newNode))
+        .on('mousemove',moveTip).on('mouseleave',hideTip);
+      nodeEl.datum(newNode);
+      nodeEl.append('circle').attr('r',18).attr('fill','rgba(10,10,28,0.88)').attr('stroke',sc).attr('stroke-width',1.2).attr('opacity',isActive?1:0.45);
+      nodeEl.append('circle').attr('r',4).attr('fill',sc).attr('opacity',(isActive?1:0.45)*0.9);
+      labelG.append('text').attr('x',newNode.x).attr('y',newNode.y+30).attr('text-anchor','middle')
+        .attr('fill','rgba(255,255,255,0.7)').attr('font-size','9.5px').attr('font-family','JetBrains Mono,monospace')
+        .attr('opacity',isActive?0.85:0.3).attr('class',`lbl lbl-${t.id}`)
+        .text(t.title.length>18?t.title.slice(0,17)+'…':t.title);
+
+      // Entrance animation
+      nodeEl.transition().duration(400).ease(d3.easeBackOut.overshoot(1.3))
+        .attr('transform',`translate(${newNode.x},${newNode.y}) scale(1)`)
+        .style('opacity','1');
+
+      // Add silk thread with fade-in — use stable id matching animateMotion mpath
+      const silkId = `silk-thr-${t.id}`;
+      linkG.append('path').attr('class','silk')
+        .attr('id', silkId)
+        .attr('fill','none').attr('stroke',sc).attr('stroke-width',1.4)
+        .attr('stroke-linecap','round').attr('opacity',0)
+        .transition().duration(400).attr('opacity', isActive?0.7:0.18);
+      // Traveling dot on new thread
+      const newDot = dotLayer.append('circle').attr('class','dot')
+        .attr('r',2).attr('fill',sc).attr('opacity',0);
+      newDot.transition().duration(400).attr('opacity', isActive?0.75:0.15);
+      const am = newDot.append('animateMotion').attr('dur','4s').attr('begin','0s').attr('repeatCount','indefinite');
+      const mpath = document.createElementNS('http://www.w3.org/2000/svg','mpath');
+      mpath.setAttributeNS('http://www.w3.org/1999/xlink','href',`#${silkId}`);
+      am.node().appendChild(mpath);
+    });
+  });
+
+  // Re-energise simulation gently
+  if(simulation) simulation.alpha(0.1).restart();
+  renderSwitcher();
+  updateCounter();
+}
+
+// ── Mock data ─────────────────────────────────
+const MOCK = [
+  { id:'agent101', name:'agent101', threads:[
+    {id:'a1',title:'Thread Visualizer UI',  status:'active',   message_count:31,created_at:'2026-05-13T20:00:00Z'},
+    {id:'a2',title:'FastMCP Server',        status:'awaiting', message_count:44,created_at:'2026-05-13T18:00:00Z'},
+    {id:'a3',title:'DynamoDB Schema',       status:'running',  message_count:28,created_at:'2026-05-13T16:00:00Z'},
+    {id:'a4',title:'OpenSearch Index',      status:'idle',     message_count:12,created_at:'2026-05-13T14:00:00Z'},
+    {id:'a5',title:'WebSocket Manager',     status:'idle',     message_count:9, created_at:'2026-05-13T12:00:00Z'},
+    {id:'a6',title:'Code Index Hook',       status:'running',  message_count:17,created_at:'2026-05-13T10:00:00Z'},
+    {id:'a7',title:'Skill Registry',        status:'idle',     message_count:8, created_at:'2026-05-13T08:00:00Z'},
+    {id:'a8',title:'ADK Prototype',         status:'killed',   message_count:21,created_at:'2026-05-12T20:00:00Z'},
+    {id:'a9',title:'LiteLLM Spike',         status:'killed',   message_count:7, created_at:'2026-05-12T14:00:00Z'},
+    {id:'aa',title:'Old Auth Flow',         status:'killed',   message_count:5, created_at:'2026-05-11T10:00:00Z'},
+  ]},
+  { id:'gemma', name:'Gemma Fine-Tune', threads:[
+    {id:'g1',title:'Training Run v3',       status:'active',   message_count:62,created_at:'2026-05-13T19:00:00Z'},
+    {id:'g2',title:'Dataset Cleaning',      status:'running',  message_count:38,created_at:'2026-05-13T17:00:00Z'},
+    {id:'g3',title:'Loss Curve Analysis',   status:'awaiting', message_count:19,created_at:'2026-05-13T15:00:00Z'},
+    {id:'g4',title:'Hyperparam Sweep',      status:'idle',     message_count:11,created_at:'2026-05-13T13:00:00Z'},
+    {id:'g5',title:'Tokenizer Config',      status:'idle',     message_count:6, created_at:'2026-05-13T11:00:00Z'},
+    {id:'g6',title:'Checkpoint Manager',    status:'running',  message_count:24,created_at:'2026-05-13T09:00:00Z'},
+    {id:'g7',title:'Eval Benchmark',        status:'idle',     message_count:14,created_at:'2026-05-13T07:00:00Z'},
+    {id:'g8',title:'LoRA Config',           status:'idle',     message_count:8, created_at:'2026-05-12T22:00:00Z'},
+    {id:'g9',title:'Eval Run v2',           status:'killed',   message_count:31,created_at:'2026-05-12T18:00:00Z'},
+    {id:'ga',title:'Eval Run v1',           status:'killed',   message_count:18,created_at:'2026-05-12T12:00:00Z'},
+    {id:'gb',title:'Base Model Spike',      status:'killed',   message_count:9, created_at:'2026-05-11T16:00:00Z'},
+    {id:'gc',title:'Data Pipeline v1',      status:'killed',   message_count:4, created_at:'2026-05-10T10:00:00Z'},
+    {id:'gd',title:'Warmup Experiment',     status:'killed',   message_count:6, created_at:'2026-05-09T14:00:00Z'},
+  ]},
+  { id:'client-a', name:'Client Arcturus', threads:[
+    {id:'c1',title:'System Architecture',   status:'active',   message_count:47,created_at:'2026-05-13T20:00:00Z'},
+    {id:'c2',title:'API Contract',          status:'awaiting', message_count:33,created_at:'2026-05-13T18:00:00Z'},
+    {id:'c3',title:'Cost Estimate',         status:'running',  message_count:22,created_at:'2026-05-13T16:00:00Z'},
+    {id:'c4',title:'Pitch Deck',            status:'active',   message_count:18,created_at:'2026-05-13T14:00:00Z'},
+    {id:'c5',title:'DB Schema Design',      status:'idle',     message_count:14,created_at:'2026-05-13T12:00:00Z'},
+    {id:'c6',title:'Auth Flow',             status:'running',  message_count:27,created_at:'2026-05-13T10:00:00Z'},
+    {id:'c7',title:'Infra Provisioning',    status:'idle',     message_count:9, created_at:'2026-05-13T08:00:00Z'},
+    {id:'c8',title:'Security Review',       status:'awaiting', message_count:16,created_at:'2026-05-13T06:00:00Z'},
+    {id:'c9',title:'Performance Baseline',  status:'idle',     message_count:7, created_at:'2026-05-12T22:00:00Z'},
+    {id:'ca',title:'Monitoring Setup',      status:'idle',     message_count:5, created_at:'2026-05-12T20:00:00Z'},
+    {id:'cb',title:'Scope v1',              status:'killed',   message_count:19,created_at:'2026-05-12T14:00:00Z'},
+    {id:'cc',title:'Old Arch Proposal',     status:'killed',   message_count:14,created_at:'2026-05-12T10:00:00Z'},
+    {id:'cd',title:'Vendor Eval',           status:'killed',   message_count:8, created_at:'2026-05-11T18:00:00Z'},
+    {id:'ce',title:'Monolith Spike',        status:'killed',   message_count:6, created_at:'2026-05-11T12:00:00Z'},
+    {id:'cf',title:'Kubernetes Spike',      status:'killed',   message_count:4, created_at:'2026-05-10T10:00:00Z'},
+  ]},
+];
+
+// ── WS ────────────────────────────────────────
+let wsRetry=1000;
+function connectWs(){
+  setHealth('warn','connecting...');
+  const ws=new WebSocket(WS);
+  ws.onopen=()=>{wsRetry=1000;setHealth('ok','connected')};
+  ws.onmessage=e=>{const d=JSON.parse(e.data);if(d.projects)applyData(d);else if(d.threads)applyData(d.threads)};
+  ws.onclose=()=>{setHealth('err','disconnected');setTimeout(connectWs,wsRetry);wsRetry=Math.min(wsRetry*2,16000)};
+  ws.onerror=()=>ws.close();
+}
+function setHealth(s,m){
+  document.getElementById('hdot').className='hdot '+s;
+  document.getElementById('hmsg').textContent=m;
+}
+
+// ── Init ──────────────────────────────────────
+// Show mock immediately — frozen, no WebSocket overwrite
+// Touch support for <900px (AC3)
+let _touchStartX = 0;
+document.addEventListener('touchstart', e=>{ _touchStartX = e.touches[0].clientX; }, {passive:true});
+document.addEventListener('touchend', e=>{
+  const dx = e.changedTouches[0].clientX - _touchStartX;
+  if(dx > 60 && document.getElementById('panel').classList.contains('open')) closePanel();
+}, {passive:true});
+
+// Init: try live data first, fall back to mock if server returns empty
+async function init(){
+  try {
+    const res  = await fetch(`${API}/api/threads`);
+    const data = await res.json();
+    if(Array.isArray(data) && data.length > 0){
+      applyData(data);   // real server has threads — use live data
+    } else {
+      applyData({ projects: MOCK });  // no real threads yet — show mock
+    }
+  } catch(e) {
+    applyData({ projects: MOCK });    // server unreachable — show mock
+  }
+  connectWs();  // always connect WS for live updates
+}
+init();
+
+window.addEventListener('resize',()=>location.reload());
+</script>
+</body>
+</html>

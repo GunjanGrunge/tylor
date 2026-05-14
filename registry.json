@@ -1,0 +1,26 @@
+{
+  "version": "1.0",
+  "skills": [
+    {
+      "name": "bmad",
+      "trigger": "Use when the user wants to create a PRD, review stories, or run BMAD workflows.",
+      "trigger_description": "Use when the user wants to create a PRD, review stories, or run BMAD workflows.",
+      "keywords": [
+        "bmad",
+        "create",
+        "prd",
+        "review",
+        "stories",
+        "workflows"
+      ],
+      "tool_count": 1,
+      "installed_date": "2026-05-13",
+      "source_path": "skills/bmad",
+      "module": "server.tools.ecc.web",
+      "tools": [
+        "web_fetch",
+        "web_scrape"
+      ]
+    }
+  ]
+}

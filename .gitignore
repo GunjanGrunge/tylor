@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Secrets & credentials — NEVER commit these
+.env
+*.env
+server/.env
+.env.local
+.aws/
+credentials
+*.pem
+*.key
+
+# Personal data — threads, memories, sessions
+.agent101/
+agent101_data/
+*.agent101
+
+# Test / dev artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# BMAD planning artifacts (local workflow docs, not plugin code)
+_bmad/
+_bmad-output/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.DS_Store
+
+# Node (ui build output if added later)
+node_modules/
+ui/dist/
+ui/.vite/
+
+# Claude Code local session files
+.claude/sessions/
+
+# BMAD local dev workflow — not part of the plugin
+.agents/
+.claude/
+
+# Mock server
+server/mock_ui_server.py
