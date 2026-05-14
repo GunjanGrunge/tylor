@@ -284,9 +284,12 @@ def kill_thread(thread_id: str) -> dict:
     if not db.get_thread_meta(thread_id):
         raise ToolError(f"Thread not found: {thread_id}")
 
-    # Mark as killed in storage so the UI reflects it immediately
+    # Mark as killed in storage so the UI reflects it immediately.
+    # Fetch existing meta first so put_item (full-doc replace on DynamoDB)
+    # doesn't wipe Name, MessageCount, Project, CreatedAt, etc.
     sk = f"THREAD#{thread_id}#META"
-    db.put_item(sk, {"Status": "killed", "LastActivity": _now_iso()})
+    meta = db.get_thread_meta(thread_id) or {}
+    db.put_item(sk, {**meta, "Status": "killed", "LastActivity": _now_iso()})
 
     # Summarization is dispatched by the kill-thread-trigger PostToolUse hook
     # (hooks/kill-thread-trigger.sh → hooks.dispatch_kill_thread_summary).

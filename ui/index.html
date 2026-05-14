@@ -1195,7 +1195,7 @@ function applyDiff(){
         .attr('stroke-linecap','round').attr('opacity',0)
         .transition().duration(400).attr('opacity', isActive?0.7:0.18);
       // Traveling dot on new thread
-      const newDot = dotLayer.append('circle').attr('class','dot')
+      const newDot = linkG.append('circle').attr('class','dot')
         .attr('r',2).attr('fill',sc).attr('opacity',0);
       newDot.transition().duration(400).attr('opacity', isActive?0.75:0.15);
       const am = newDot.append('animateMotion').attr('dur','4s').attr('begin','0s').attr('repeatCount','indefinite');

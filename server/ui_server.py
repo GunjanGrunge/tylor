@@ -114,14 +114,21 @@ def _group_threads_by_project(threads: list[dict]) -> list[dict]:
     ]
 
 
-def _fetch_messages(thread_id: str, limit: int = 50) -> list[dict]:
-    """Fetch the last `limit` messages for a thread. Returns [] on any error."""
+def _fetch_messages(thread_id: str, limit: int = 50, before: str | None = None) -> list[dict]:
+    """Fetch the last `limit` messages for a thread, optionally before a timestamp.
+
+    `before` is an ISO timestamp string (CreatedAt of the oldest message already
+    shown in the UI). Only messages strictly older than `before` are returned,
+    enabling "load earlier" pagination without re-fetching the same items.
+    """
     try:
         from .tools.tylor import _get_db
         db = _get_db()
         prefix = f"THREAD#{thread_id}#MSG#"
         items = db.query_all(prefix)
         items.sort(key=lambda i: i.get("SK", ""))
+        if before:
+            items = [i for i in items if i.get("CreatedAt", "") < before]
         tail = items[-limit:]
         return [
             {
@@ -190,8 +197,9 @@ async def handle_thread_messages(request: web.Request) -> web.Response:
     thread_id = request.match_info["thread_id"]
     if not _THREAD_ID_RE.match(thread_id):
         return web.json_response({"error": "invalid thread_id"}, status=400)
+    before = request.rel_url.query.get("before") or None
     loop = asyncio.get_running_loop()
-    messages = await loop.run_in_executor(None, _fetch_messages, thread_id)
+    messages = await loop.run_in_executor(None, _fetch_messages, thread_id, 50, before)
     return web.json_response(messages)
 
 
