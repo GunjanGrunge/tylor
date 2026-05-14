@@ -242,6 +242,7 @@ async def run_with_agents(
         agents=agent_registry,
         resume=session_id,
         cwd=cwd,
+        max_turns=20,
     )
 
     new_session_id: str | None = None
@@ -299,8 +300,11 @@ async def run_in_thread(thread_id: str, message: str, cwd: str | None = None) ->
         pass
 
     chunks: list[str] = []
-    async for chunk in run_with_agents(message, thread_id, thread_name, cwd):
-        chunks.append(chunk)
+    try:
+        async for chunk in run_with_agents(message, thread_id, thread_name, cwd):
+            chunks.append(chunk)
+    except asyncio.TimeoutError:
+        chunks.append("\n⚠️  Harness timed out (240s). The agent may still be running.")
     return "".join(chunks) or "(no output)"
 
 

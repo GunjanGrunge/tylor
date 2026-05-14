@@ -157,6 +157,7 @@ class JsonStore:
                         "name": item.get("Name", existing.get("name", "")),
                         "status": item.get("Status", existing.get("status", "active")).lower(),
                         "updated_at": now,
+                        **({"project": item["Project"]} if item.get("Project") else {}),
                     })
                     if "Summary" in item:
                         existing["summary"] = item["Summary"]
@@ -166,6 +167,7 @@ class JsonStore:
                     thread = {
                         "id": thread_id, "name": item.get("Name", ""),
                         "status": item.get("Status", "active").lower(),
+                        "project": item.get("Project", ""),
                         "created_at": item.get("CreatedAt", now),
                         "updated_at": now, "messages": [], "summary": None,
                         "sandbox_roots": [], "agent_states": {}, "agent_outputs": [],
@@ -246,6 +248,7 @@ class JsonStore:
             "MessageCount": len(t.get("messages", [])),
             "CreatedAt": t.get("created_at", ""),
             "UpdatedAt": t.get("updated_at", ""),
+            "Project": t.get("project", ""),
         }]
         for msg in t.get("messages", []):
             items.append(msg)

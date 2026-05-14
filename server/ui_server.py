@@ -117,14 +117,8 @@ def _group_threads_by_project(threads: list[dict]) -> list[dict]:
 def _fetch_messages(thread_id: str, limit: int = 50) -> list[dict]:
     """Fetch the last `limit` messages for a thread. Returns [] on any error."""
     try:
-        from . import config
-        from .storage.dynamo import DynamoClient
-
-        db = DynamoClient(
-            table_name=config.get("dynamo_table", "agent101"),
-            user_id=config.get("user_id", "default"),
-            profile=config.get("aws_profile"),
-        )
+        from .tools.tylor import _get_db
+        db = _get_db()
         prefix = f"THREAD#{thread_id}#MSG#"
         items = db.query_all(prefix)
         items.sort(key=lambda i: i.get("SK", ""))
@@ -142,12 +136,25 @@ def _fetch_messages(thread_id: str, limit: int = 50) -> list[dict]:
         return []
 
 
+def _fetch_current_thread_id() -> str | None:
+    """Return the ID of the currently active thread, or None."""
+    try:
+        from .tools.tylor import _get_db
+        db = _get_db()
+        marker = db.get_current_thread_marker()
+        return marker.get("CurrentThreadId") if marker else None
+    except Exception:
+        return None
+
+
 async def thread_update_payload() -> dict:
     """Build the standard thread_update broadcast payload."""
     threads = _fetch_threads()
+    current_id = _fetch_current_thread_id()
     return {
-        "type":     "thread_update",
-        "projects": _group_threads_by_project(threads),
+        "type":             "thread_update",
+        "projects":         _group_threads_by_project(threads),
+        "current_thread_id": current_id,
     }
 
 
@@ -175,7 +182,8 @@ async def handle_threads(request: web.Request) -> web.Response:
     loop = asyncio.get_running_loop()
     threads = await loop.run_in_executor(None, _fetch_threads)
     projects = _group_threads_by_project(threads)
-    return web.json_response({"projects": projects})
+    current_id = await loop.run_in_executor(None, _fetch_current_thread_id)
+    return web.json_response({"projects": projects, "current_thread_id": current_id})
 
 
 async def handle_thread_messages(request: web.Request) -> web.Response:

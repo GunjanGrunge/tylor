@@ -344,6 +344,7 @@ drawBg();
 // ── State ─────────────────────────────────────
 let projects = [];
 let activeProjectId = null;
+let currentThreadId = null;   // the thread currently active in Claude
 let simulation = null;
 let graphNodes = [];  // D3 nodes: [{id, type:'claude'|'project'|'thread', ...}]
 let graphLinks = [];  // D3 links: [{source, target, type}]
@@ -647,37 +648,63 @@ function render(){
       const sizeFactor = Math.max(0.7, 1 - threadCount * 0.012);
       const r = Math.round((d.status==='active' ? 22 : 18) * sizeFactor);
       const isPinned = d.fx !== null && d.fx !== undefined;
+      const isCurrent = d.thread && d.thread.id === currentThreadId;
+
+      // Active-thread: outer pulsing halo
+      if(isCurrent){
+        g.append('circle').attr('r',r+10).attr('class','active-halo')
+          .attr('fill','none')
+          .attr('stroke','rgba(0,255,179,0.55)')
+          .attr('stroke-width',1.5)
+          .style('animation','ring-pulse 2s ease-out infinite');
+        g.append('circle').attr('r',r+6).attr('class','active-halo2')
+          .attr('fill','none')
+          .attr('stroke','rgba(0,255,179,0.3)')
+          .attr('stroke-width',1)
+          .style('animation','ring-pulse 2s ease-out infinite 0.4s');
+      }
       // Outer status ring (thin, shows state)
       g.append('circle').attr('r',r+3)
         .attr('fill','none')
-        .attr('stroke', sc)
-        .attr('stroke-width', 1)
-        .attr('opacity', alpha * 0.5)
+        .attr('stroke', isCurrent ? 'rgba(0,255,179,0.9)' : sc)
+        .attr('stroke-width', isCurrent ? 2 : 1)
+        .attr('opacity', alpha * (isCurrent ? 0.9 : 0.5))
         .attr('stroke-dasharray', d.status==='idle'?'3 3':null);
       // Main node body — colored by thread identity
       g.append('circle').attr('r',r)
-        .attr('fill',`rgba(10,10,28,0.88)`)
-        .attr('stroke', tc)
-        .attr('stroke-width', d.status==='active' ? 2.2 : 1.4)
+        .attr('fill',isCurrent ? 'rgba(0,30,22,0.95)' : 'rgba(10,10,28,0.88)')
+        .attr('stroke', isCurrent ? '#00ffb3' : tc)
+        .attr('stroke-width', isCurrent ? 2.8 : (d.status==='active' ? 2.2 : 1.4))
         .attr('opacity', alpha)
-        .style('filter', isActiveProj && STATUS_GLOW[d.status]!=='none'
-          ? `drop-shadow(0 0 8px ${tc}bb)` : 'none');
+        .style('filter', isCurrent
+          ? 'drop-shadow(0 0 12px rgba(0,255,179,0.7)) drop-shadow(0 0 24px rgba(0,255,179,0.3))'
+          : (isActiveProj && STATUS_GLOW[d.status]!=='none' ? `drop-shadow(0 0 8px ${tc}bb)` : 'none'));
       // Center dot — thread color fill
-      g.append('circle').attr('r', isPinned ? 5 : 4).attr('cx',0).attr('cy',0)
-        .attr('fill', tc).attr('opacity', alpha*0.9);
+      g.append('circle').attr('r', isCurrent ? 6 : (isPinned ? 5 : 4)).attr('cx',0).attr('cy',0)
+        .attr('fill', isCurrent ? '#00ffb3' : tc).attr('opacity', alpha*0.9);
+      // Active-thread: "▶" play indicator top-right
+      if(isCurrent){
+        g.append('text').attr('x',r-2).attr('y',-(r-2))
+          .attr('text-anchor','middle').attr('dominant-baseline','middle')
+          .attr('font-size','8px').attr('fill','#00ffb3').attr('opacity',0.95)
+          .text('▶');
+      }
       // Pin indicator for locked nodes
-      if(isPinned){
+      if(isPinned && !isCurrent){
         g.append('circle').attr('r',2).attr('cx',r-4).attr('cy',-(r-4))
           .attr('fill','rgba(255,255,255,0.6)').attr('opacity',alpha*0.7);
       }
-      // Label below
+      // Label below — bold + green for active thread
       labelG.append('text')
         .attr('x',(d.x||W/2)).attr('y',(d.y||H/2)+r+12)
-        .attr('text-anchor','middle').attr('fill','rgba(255,255,255,0.7)')
-        .attr('font-size','9.5px').attr('font-family','JetBrains Mono,monospace')
-        .attr('opacity',isActiveProj ? 0.85 : 0.3)
+        .attr('text-anchor','middle')
+        .attr('fill', isCurrent ? '#00ffb3' : 'rgba(255,255,255,0.7)')
+        .attr('font-size', isCurrent ? '10.5px' : '9.5px')
+        .attr('font-weight', isCurrent ? '700' : '400')
+        .attr('font-family','JetBrains Mono,monospace')
+        .attr('opacity', isCurrent ? 1 : (isActiveProj ? 0.85 : 0.3))
         .attr('class',`lbl lbl-${d.id}`)
-        .text(d.label.length>18 ? d.label.slice(0,17)+'…' : d.label);
+        .text((isCurrent ? '▶ ' : '') + (d.label.length>18 ? d.label.slice(0,17)+'…' : d.label));
 
     } else if(d.type==='killed-group'){
       g.append('circle').attr('r',20)
@@ -1010,6 +1037,11 @@ function applyData(data){
   else if(Array.isArray(data) && data.length) incoming = [{ id:'default', name:'default', threads:data }];
   else return;
 
+  // Track active thread — triggers re-render if changed
+  const newCurrentId = data.current_thread_id || null;
+  const currentChanged = newCurrentId !== currentThreadId;
+  currentThreadId = newCurrentId;
+
   const newProjects = incoming.map(p=>({...p, threads: p.threads||[]}));
 
   // First load — always full render
@@ -1017,10 +1049,19 @@ function applyData(data){
     projects = newProjects;
     if(!activeProjectId||!projects.find(p=>p.id===activeProjectId))
       activeProjectId = projects[0]?.id||null;
+    // Auto-switch to the project containing the active thread
+    if(currentThreadId){
+      for(const p of projects){
+        if(p.threads.find(t=>t.id===currentThreadId)){ activeProjectId=p.id; break; }
+      }
+    }
     render();
     _initialRenderDone = true;
     return;
   }
+
+  // Active thread changed — full rebuild to update highlighting
+  if(currentChanged){ render(); return; }
 
   // Subsequent WS updates — smart diff
   let changed = false;
@@ -1224,7 +1265,11 @@ function connectWs(){
   setHealth('warn','connecting...');
   const ws=new WebSocket(WS);
   ws.onopen=()=>{wsRetry=1000;setHealth('ok','connected')};
-  ws.onmessage=e=>{const d=JSON.parse(e.data);if(d.projects)applyData(d);else if(d.threads)applyData({projects:[{id:'default',name:'default',threads:d.threads}]});};
+  ws.onmessage=e=>{
+    const d=JSON.parse(e.data);
+    if(d.projects) applyData(d);
+    else if(d.threads) applyData({projects:[{id:'default',name:'default',threads:d.threads}], current_thread_id: d.current_thread_id||null});
+  };
   ws.onclose=()=>{setHealth('err','disconnected');setTimeout(connectWs,wsRetry);wsRetry=Math.min(wsRetry*2,16000)};
   ws.onerror=()=>ws.close();
 }
@@ -1253,7 +1298,8 @@ async function init(){
     if(hasProjects || hasThreads){
       applyData(data);   // real server has threads — use live data
     } else {
-      applyData({ projects: MOCK });  // no real threads yet — show mock
+      applyData({ projects: MOCK, _isMock: true });  // no real threads yet — show mock
+      setHealth('warn','demo data — use CT <name> to create a thread');
     }
   } catch(e) {
     applyData({ projects: MOCK });    // server unreachable — show mock
