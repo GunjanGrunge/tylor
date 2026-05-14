@@ -222,11 +222,7 @@ async def run_with_agents(
     cwd: str | None = None,
 ) -> AsyncIterator[str]:
     try:
-        from claude_agent_sdk import (
-            query, ClaudeAgentOptions,
-            PermissionResultAllow, PermissionResultDeny,
-        )
-        from claude_agent_sdk.types import HookMatcher, ToolPermissionContext
+        from claude_agent_sdk import query, ClaudeAgentOptions
     except ImportError:
         yield "⚠️  Agent SDK not installed. Run: pip install claude-agent-sdk"
         return
@@ -234,32 +230,6 @@ async def run_with_agents(
     bmad_path = _get_bmad_path()
     system_prompt = build_supervisor_prompt(thread_name, cwd, bmad_path)
     agent_registry = build_agent_registry()
-
-    # Collect questions from AskUserQuestion so we can surface them
-    pending_questions: list[dict] = []
-
-    async def can_use_tool(
-        tool_name: str,
-        input_data: dict,
-        context: ToolPermissionContext,
-    ) -> PermissionResultAllow | PermissionResultDeny:
-        """
-        Human-in-the-loop: intercept AskUserQuestion and surface to user.
-        All other tools auto-allowed — agents work autonomously.
-        """
-        if tool_name == "AskUserQuestion":
-            # Collect questions — they'll be yielded before the next content chunk
-            for q in input_data.get("questions", []):
-                pending_questions.append(q)
-            # Return questions back so agent knows we received them
-            return PermissionResultAllow(updated_input=input_data)
-
-        # All other tools: auto-allow
-        return PermissionResultAllow(updated_input=input_data)
-
-    # Required: dummy PreToolUse hook keeps stream open for can_use_tool
-    async def _keep_stream_open(input_data: dict, tool_use_id: str, context) -> dict:
-        return {"continue_": True}
 
     session_id = _load_session_id(thread_id)
 
@@ -272,40 +242,17 @@ async def run_with_agents(
         agents=agent_registry,
         resume=session_id,
         cwd=cwd,
-        can_use_tool=can_use_tool,
-        hooks={
-            "PreToolUse": [HookMatcher(matcher=None, hooks=[_keep_stream_open])]
-        },
     )
 
     new_session_id: str | None = None
     try:
         async for msg in query(prompt=message, options=options):
+            # Capture session ID from ResultMessage (end of run)
+            sid = getattr(msg, "session_id", None)
+            if sid:
+                new_session_id = sid
 
-            # Capture session ID from init message
-            if hasattr(msg, "subtype") and msg.subtype == "init":
-                sid = getattr(msg, "session_id", None)
-                if not sid and hasattr(msg, "data") and isinstance(msg.data, dict):
-                    sid = msg.data.get("session_id")
-                if sid:
-                    new_session_id = sid
-
-            # Surface any pending questions to the user before next content
-            if pending_questions:
-                for q in pending_questions:
-                    if isinstance(q, dict):
-                        header = q.get("header", "")
-                        question = q.get("question", "")
-                        options_list = q.get("options", [])
-                        yield f"\n❓ **{header + ': ' if header else ''}{question}**"
-                        for opt in options_list:
-                            yield f"\n  • {opt.get('label', '')}: {opt.get('description', '')}"
-                        yield "\n"
-                    else:
-                        yield f"\n❓ **{q}**\n"
-                pending_questions.clear()
-
-            # Stream text content
+            # Stream text content from AssistantMessage
             content = getattr(msg, "content", None) or getattr(msg, "text", None)
             if isinstance(content, str) and content:
                 yield content
