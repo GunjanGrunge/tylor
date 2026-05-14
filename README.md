@@ -29,15 +29,13 @@ SwThread Backend      → instant context switch, no re-explanation
 
 **Requirements:** [Claude Code](https://claude.ai/code) · Python 3.8+
 
-### Step 1 — Install the plugin
+### Step 1 — Clone the plugin
 
-In any Claude Code session, run:
-
-```
-/plugins install GunjanGrunge/tylor
+```bash
+git clone https://github.com/GunjanGrunge/tylor ~/.claude/plugins/GunjanGrunge/tylor
 ```
 
-Claude Code downloads the plugin and registers the MCP server automatically.
+Claude Code automatically discovers plugins placed in `~/.claude/plugins/`. No marketplace registration needed.
 
 On first use, it creates a Python virtual environment at `~/.tylor/venv` and installs dependencies. This takes about 30 seconds and only happens once.
 
@@ -64,8 +62,9 @@ You should see the full command listing. If you see it — Tylor is running.
 The MCP server may not have started. Check:
 
 1. Restart Claude Code completely (quit, reopen)
-2. Run `/plugins install GunjanGrunge/tylor` again
+2. Confirm the plugin was cloned: `ls ~/.claude/plugins/GunjanGrunge/tylor`
 3. Check the MCP server is listed: go to Claude Code settings → MCP servers → confirm `agent101` appears
+4. If missing, re-clone: `git clone https://github.com/GunjanGrunge/tylor ~/.claude/plugins/GunjanGrunge/tylor`
 
 ### Python not found / server fails to start
 
