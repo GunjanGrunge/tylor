@@ -12,6 +12,8 @@ SwThread Backend      → instant context switch, no re-explanation
 
 No database. No cloud account. No configuration. Just install and go.
 
+> **Tylor runs inside Claude Code using Claude itself** — no separate AI, no extra API keys. It gives Claude the memory and tools it was missing.
+
 ---
 
 ## What it does
