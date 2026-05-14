@@ -1169,7 +1169,7 @@ function connectWs(){
   setHealth('warn','connecting...');
   const ws=new WebSocket(WS);
   ws.onopen=()=>{wsRetry=1000;setHealth('ok','connected')};
-  ws.onmessage=e=>{const d=JSON.parse(e.data);if(d.projects)applyData(d);else if(d.threads)applyData(d.threads)};
+  ws.onmessage=e=>{const d=JSON.parse(e.data);if(d.projects)applyData(d);else if(d.threads)applyData({projects:[{id:'default',name:'default',threads:d.threads}]});};
   ws.onclose=()=>{setHealth('err','disconnected');setTimeout(connectWs,wsRetry);wsRetry=Math.min(wsRetry*2,16000)};
   ws.onerror=()=>ws.close();
 }
@@ -1193,7 +1193,9 @@ async function init(){
   try {
     const res  = await fetch(`${API}/api/threads`);
     const data = await res.json();
-    if(Array.isArray(data) && data.length > 0){
+    const hasProjects = data.projects && data.projects.length > 0;
+    const hasThreads  = Array.isArray(data) && data.length > 0;
+    if(hasProjects || hasThreads){
       applyData(data);   // real server has threads — use live data
     } else {
       applyData({ projects: MOCK });  // no real threads yet — show mock
