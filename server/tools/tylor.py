@@ -74,15 +74,32 @@ def _validate_name(name: str) -> None:
 
 
 def _get_db():
-    """Return a DynamoClient configured from server.config."""
-    from server.config import config
-    from server.storage.dynamo import DynamoClient
+    """
+    Return the configured storage backend.
 
-    return DynamoClient(
-        table_name=config.get("dynamo_table", "agent101"),
-        user_id=config.get("user_id", "default"),
-        profile=config.get("aws_profile"),
-    )
+    Default: JsonStore (local ~/.tylor/threads.json, zero setup).
+    Optional: DynamoClient when AWS credentials + DYNAMO_TABLE are configured.
+    """
+    from server.config import config
+
+    # Use DynamoDB ONLY when user has explicitly set DYNAMO_TABLE env var
+    # (not just because AWS credentials happen to exist on the machine)
+    import os
+    use_dynamo = bool(os.environ.get("DYNAMO_TABLE") or os.environ.get("TYLOR_USE_DYNAMO"))
+
+    if use_dynamo:
+        from server.storage.dynamo import DynamoClient
+        return DynamoClient(
+            table_name=dynamo_table,
+            user_id=config.get("user_id", "default"),
+            profile=config.get("aws_profile"),
+        )
+
+    # Default: local JSON storage — no AWS required
+    from pathlib import Path
+    from server.storage.json_store import JsonStore
+    store_path = Path(config.get("storage_path") or Path.home() / ".tylor" / "threads.json")
+    return JsonStore(path=store_path)
 
 
 def _get_memory_client():

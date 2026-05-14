@@ -55,7 +55,8 @@ def _load() -> dict:
         return default
 
     cfg = {
-        "aws_profile":    _get("AWS_PROFILE"),
+        "aws_profile":       _get("AWS_PROFILE"),
+        "aws_access_key_id": _get("AWS_ACCESS_KEY_ID"),
         "bedrock_region": _get("BEDROCK_REGION", default="us-east-1"),
         "bedrock_opus_model": _get(
             "BEDROCK_OPUS_MODEL",
