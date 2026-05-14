@@ -180,6 +180,14 @@ def new_thread(name: str) -> dict:
         "created_at": written["CreatedAt"],
     }
     _broadcast_thread_update()
+
+    # Auto-open Thread Visualizer on first thread creation if not already open
+    try:
+        from .ui import _open_ui_browser
+        _open_ui_browser()
+    except Exception:
+        pass
+
     return result
 
 

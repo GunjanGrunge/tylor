@@ -23,7 +23,8 @@ _THREAD_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{3,64}$")
 logger = logging.getLogger(__name__)
 
 UI_DIR = Path(__file__).parent.parent / "ui"
-PORT = 8765
+PORT = 8765          # updated to the actual bound port on startup
+PORT_RANGE = (8765, 8775)  # try these ports in order
 
 # ── Global state ────────────────────────────────────────────────────────────
 # Shared across the process lifetime; safe because asyncio is single-threaded.
@@ -221,34 +222,44 @@ def _make_app() -> web.Application:
 
 async def start_ui_server() -> web.AppRunner | None:
     """
-    Start the aiohttp UI server on PORT.
-    Returns the AppRunner on success, None if port is in use.
+    Start the aiohttp UI server, trying PORT_RANGE in order until one binds.
+    Updates the module-level PORT to the actual bound port.
+    Returns the AppRunner on success, None if all ports are unavailable.
     Sets module-level `ui_available` accordingly.
     """
-    global ui_available
+    global ui_available, PORT
 
     app = _make_app()
     runner = web.AppRunner(app, access_log=None)
     await runner.setup()
 
-    site = web.TCPSite(runner, "localhost", PORT)
-    try:
-        await site.start()
-        ui_available = True
-        logger.info("ui_server: Thread Visualizer running at http://localhost:%d", PORT)
-        return runner
-    except OSError as exc:
-        await runner.cleanup()
-        ui_available = False
-        if exc.errno == errno.EADDRINUSE:
-            logger.warning(
-                "ui_server: port %d already in use — Thread Visualizer unavailable. "
-                "MCP tools continue to work normally.",
-                PORT,
-            )
-        else:
+    for candidate in range(PORT_RANGE[0], PORT_RANGE[1]):
+        site = web.TCPSite(runner, "localhost", candidate)
+        try:
+            await site.start()
+            PORT = candidate
+            ui_available = True
+            logger.info("ui_server: Thread Visualizer running at http://localhost:%d", PORT)
+            return runner
+        except OSError as exc:
+            if exc.errno == errno.EADDRINUSE:
+                logger.debug("ui_server: port %d in use, trying next…", candidate)
+                continue
+            # Non-EADDRINUSE error — give up immediately
+            await runner.cleanup()
+            ui_available = False
             logger.warning(
                 "ui_server: could not start on port %d (%s) — Thread Visualizer unavailable.",
-                PORT, exc,
+                candidate, exc,
             )
-        return None
+            return None
+
+    # All ports exhausted
+    await runner.cleanup()
+    ui_available = False
+    logger.warning(
+        "ui_server: all ports %d–%d in use — Thread Visualizer unavailable. "
+        "MCP tools continue to work normally.",
+        PORT_RANGE[0], PORT_RANGE[1] - 1,
+    )
+    return None
