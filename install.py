@@ -261,7 +261,7 @@ def _bundle_bmad() -> None:
     """
     import subprocess
     bmad_dir = Path.home() / ".tylor" / "bmad"
-    bmad_repo = "https://github.com/bmad-dev/bmad-method"
+    bmad_repo = "https://github.com/bmadcode/BMAD-METHOD"
 
     if bmad_dir.exists():
         # Already installed — pull latest silently
