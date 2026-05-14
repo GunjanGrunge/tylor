@@ -33,6 +33,7 @@ from server.tools import skill_installer  # noqa: F401
 from server.tools import help           # noqa: F401
 from server.tools import executor       # noqa: F401
 from server.tools import ui             # noqa: F401
+from server.tools import harness        # noqa: F401  — Agent SDK orchestration
 from server import config               # noqa: F401
 
 logger = logging.getLogger(__name__)

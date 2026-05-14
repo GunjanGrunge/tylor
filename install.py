@@ -257,6 +257,49 @@ def validate(python_path: Path) -> bool:
 
 # ── Storage config ────────────────────────────────────────────────────────────
 
+def _bundle_bmad() -> None:
+    """
+    Clone or update BMAD into ~/.tylor/bmad so the harness can use its
+    workflows silently. BMAD is never exposed directly to the user —
+    the harness activates it based on thread context.
+    """
+    import subprocess
+    bmad_dir = Path.home() / ".tylor" / "bmad"
+    bmad_repo = "https://github.com/bmad-dev/bmad-method"
+
+    if bmad_dir.exists():
+        # Already installed — pull latest silently
+        result = subprocess.run(
+            ["git", "-C", str(bmad_dir), "pull", "--quiet"],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            ok("BMAD updated")
+        else:
+            warn("BMAD update skipped (no internet or git not available)")
+    else:
+        # First install — try to clone
+        result = subprocess.run(
+            ["git", "clone", "--quiet", "--depth=1", bmad_repo, str(bmad_dir)],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            ok(f"BMAD bundled at {bmad_dir}")
+        else:
+            warn("BMAD not available (no internet or git not found) — harness will work without it")
+            return
+
+    # Point harness to BMAD location via config
+    config_file = Path.home() / ".tylor" / "config.json"
+    try:
+        import json
+        cfg = json.loads(config_file.read_text()) if config_file.exists() else {}
+        cfg["bmad_path"] = bmad_dir.as_posix()
+        config_file.write_text(json.dumps(cfg, indent=2))
+    except Exception:
+        pass
+
+
 def configure_storage(use_dynamo: bool) -> None:
     config_dir = Path.home() / ".tylor"
     config_dir.mkdir(parents=True, exist_ok=True)
@@ -314,7 +357,11 @@ def main() -> None:
         else:
             fail(f"Failed to patch {cfg_path}")
 
-    # Step 5: Validate
+    # Step 5: Bundle BMAD silently
+    header("Bundling BMAD (silent)")
+    _bundle_bmad()
+
+    # Step 6: Validate
     header("Validating")
     validate(python_path)
 
