@@ -3,26 +3,37 @@ server/main.py — agent101 FastMCP entry point.
 
 Starts both FastMCP (stdio transport) and the aiohttp Thread Visualizer
 server concurrently on a single asyncio event loop.
+
+Can be run as a script: python3 server/main.py (from the plugin root)
+or as a module: python3 -m server.main
 """
 from __future__ import annotations
 import asyncio
 import logging
+import os
 import signal
 import sys
 
-from .tools._mcp import mcp  # noqa: F401
+# Allow running as a standalone script OR as a module.
+# When run as `python3 server/main.py`, __package__ is None and relative
+# imports fail. This block ensures the plugin root is on sys.path so that
+# `from server.tools...` absolute imports work in both modes.
+if __package__ is None or __package__ == "":
+    _plugin_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _plugin_root not in sys.path:
+        sys.path.insert(0, _plugin_root)
+
+from server.tools._mcp import mcp  # noqa: F401
 
 # Register @mcp.tool() decorators (side effects)
-from .tools import tylor     # noqa: F401, E402
-from .tools import agents    # noqa: F401, E402
-from .tools import registry  # noqa: F401, E402
-from .tools import skill_installer  # noqa: F401, E402
-from .tools import help      # noqa: F401, E402
-from .tools import executor  # noqa: F401, E402
-from .tools import ui        # noqa: F401, E402
-
-# Load config at startup (emits warnings for missing optional keys)
-from . import config  # noqa: F401, E402
+from server.tools import tylor          # noqa: F401
+from server.tools import agents         # noqa: F401
+from server.tools import registry       # noqa: F401
+from server.tools import skill_installer  # noqa: F401
+from server.tools import help           # noqa: F401
+from server.tools import executor       # noqa: F401
+from server.tools import ui             # noqa: F401
+from server import config               # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +63,9 @@ async def _main(ui_only: bool = False) -> None:
             pass
 
     if ui_only:
-        # UI-only mode: keep aiohttp running until signal, no MCP stdio needed
         logger.info("Running in UI-only mode — http://localhost:8765")
         await stop_event.wait()
     else:
-        # Normal mode: co-run FastMCP stdio transport
         mcp_task = asyncio.create_task(mcp.run_stdio_async())
         stop_task = asyncio.create_task(stop_event.wait())
         done, pending = await asyncio.wait(

@@ -5,7 +5,7 @@
       "command": "sh",
       "args": [
         "-c",
-        "_P=\"${CLAUDE_PLUGIN_ROOT:-}\"; if [ -z \"$_P\" ]; then for _D in \"$HOME/.claude/plugins/cache/GunjanGrunge/tylor\"/[0-9]*/ \"$HOME/.claude/plugins/cache/gunjangrunge/tylor\"/[0-9]*/; do [ -f \"$_D/server/main.py\" ] && { _P=\"$_D\"; break; }; done; fi; [ -n \"$_P\" ] || { echo 'Tylor: plugin root not found' >&2; exit 1; }; _VENV=\"$HOME/.tylor/venv\"; if [ ! -f \"$_VENV/bin/python3\" ] && [ ! -f \"$_VENV/Scripts/python.exe\" ]; then python3 -m venv \"$_VENV\" && \"$_VENV/bin/pip\" install -q -r \"$_P/server/requirements.txt\"; fi; _PY=\"$_VENV/bin/python3\"; [ -f \"$_PY\" ] || _PY=\"$_VENV/Scripts/python.exe\"; exec \"$_PY\" \"$_P/server/main.py\""
+        "_P=\"${CLAUDE_PLUGIN_ROOT:-}\"; if [ -z \"$_P\" ]; then for _D in \"$HOME/.claude/plugins/GunjanGrunge/tylor\" \"$HOME/.claude/plugins/cache/GunjanGrunge/tylor/\"[0-9]*/ \"$HOME/.claude/plugins/cache/gunjangrunge/tylor/\"[0-9]*/; do [ -f \"$_D/server/main.py\" ] && { _P=\"$_D\"; break; }; done; fi; [ -n \"$_P\" ] || { echo 'Tylor: plugin root not found' >&2; exit 1; }; _VENV=\"$HOME/.tylor/venv\"; if [ ! -f \"$_VENV/bin/python3\" ] && [ ! -f \"$_VENV/Scripts/python3.exe\" ] && [ ! -f \"$_VENV/Scripts/python.exe\" ]; then python3 -m venv \"$_VENV\" && \"$_VENV/bin/pip\" install -q -r \"$_P/server/requirements.txt\" 2>&1 | tail -2; fi; _PY=\"$_VENV/bin/python3\"; [ -f \"$_PY\" ] || _PY=\"$_VENV/Scripts/python3.exe\"; [ -f \"$_PY\" ] || _PY=\"$_VENV/Scripts/python.exe\"; cd \"$_P\" && exec \"$_PY\" -m server.main"
       ]
     }
   }
