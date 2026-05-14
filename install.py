@@ -57,11 +57,7 @@ def is_wsl() -> bool:
 # ── Config file locations ─────────────────────────────────────────────────────
 
 def claude_code_settings() -> Path:
-    """Claude Code CLI + VSCode extension — same file on all platforms."""
-    if is_windows():
-        appdata = os.environ.get("APPDATA", "")
-        if appdata:
-            return Path(appdata) / "Claude" / "claude_code_settings.json"
+    """Claude Code CLI + VSCode extension — ~/.claude/settings.json on all platforms."""
     return Path.home() / ".claude" / "settings.json"
 
 
