@@ -87,8 +87,6 @@ python3 -m server.main --ui-only
 - **Click a project** to focus that cluster
 - Threads update live as you work
 
-![Tylor Thread Visualizer](ui/tylor-logo.svg)
-
 ---
 
 ## Core commands
