@@ -284,6 +284,10 @@ def kill_thread(thread_id: str) -> dict:
     if not db.get_thread_meta(thread_id):
         raise ToolError(f"Thread not found: {thread_id}")
 
+    # Mark as killed in storage so the UI reflects it immediately
+    sk = f"THREAD#{thread_id}#META"
+    db.put_item(sk, {"Status": "killed", "LastActivity": _now_iso()})
+
     # Summarization is dispatched by the kill-thread-trigger PostToolUse hook
     # (hooks/kill-thread-trigger.sh → hooks.dispatch_kill_thread_summary).
     # Do NOT also create_task here — that would cause double-summarization.
@@ -357,7 +361,7 @@ def list_threads() -> dict:
         threads.append({
             "thread_id": thread_id,
             "name": item.get("Name", ""),
-            "status": item.get("Status", "active"),
+            "status": item.get("Status", "active").lower(),
             "last_activity": item.get("LastActivity", item.get("UpdatedAt", "")),
             "message_count": int(item.get("MessageCount", 0)),
             "project": item.get("Project", ""),
