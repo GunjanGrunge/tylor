@@ -52,3 +52,10 @@ ui/.vite/
 
 # Mock server
 server/mock_ui_server.py
+
+# pip packaging artifacts (replaced by .mcp.json plugin pattern)
+src/
+pyproject.toml
+*.egg-info/
+__pycache__/
+*.pyc

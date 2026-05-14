@@ -1,0 +1,22 @@
+{
+  "name": "tylor",
+  "version": "0.1.0",
+  "description": "Tylor — the tailor to your threads. Eliminates Claude session death with persistent named threads, silent code indexing, a live thread visualizer, agent personas, and AFK autonomous execution.",
+  "author": {
+    "name": "GunjanGrunge"
+  },
+  "repository": "https://github.com/GunjanGrunge/tylor",
+  "license": "MIT",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "mcp",
+    "plugin",
+    "threads",
+    "memory",
+    "persistence",
+    "agents",
+    "session"
+  ],
+  "homepage": "https://github.com/GunjanGrunge/tylor#readme"
+}

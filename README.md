@@ -27,93 +27,49 @@ CT Gemma Fine-Tuning  → new thread, clean slate
 
 ## Installation
 
-**Requirements:** macOS or Linux · Python 3.8+ · [Claude Code](https://claude.ai/code)
+**Requirements:** [Claude Code](https://claude.ai/code) · Python 3.8+
 
 ---
 
-### Step 1 — Install the package
+### Install via Claude Code (recommended)
 
-```bash
-pip install git+https://github.com/GunjanGrunge/tylor
+In Claude Code, run:
+
+```
+/plugins install GunjanGrunge/tylor
 ```
 
-> **Note:** Use `pip3` if `pip` points to Python 2 on your system.
+Claude Code handles everything — downloads the plugin, registers the MCP server, and wires up lifecycle hooks automatically.
+
+On first use, it will create a Python virtual environment at `~/.tylor/venv` and install dependencies. This takes ~30 seconds once.
 
 ---
 
-### Step 2 — Run the installer
+### Verify
 
-```bash
-agent101 install
-```
-
-This automatically:
-- Registers the Tylor MCP server in `~/.claude/settings.json`
-- Wires up lifecycle hooks (SessionStart, Stop, PostToolUse)
-- Initialises local thread storage at `~/.tylor/`
-
-You will see:
-```
-  Tylor installer
-  ────────────────────────────────────────
-✓ Storage mode: Project (local JSON, zero AWS setup)
-✓ MCP server registered in settings.json
-✓ SessionStart hook registered
-✓ Stop hook registered
-✓ PostToolUse hook registered
-✓ Skill registry initialized
-✓ MCP server validates correctly (name: agent101)
-
-  ✓ Tylor installed successfully!
-
-  Next steps:
-  1. Restart Claude Code
-  2. Type /help-agent101 to see all commands
-```
-
----
-
-### Step 3 — Restart Claude Code
-
-Quit and reopen Claude Code so it picks up the new MCP server from `settings.json`.
-
----
-
-### Step 4 — Verify
-
-Open any project in Claude Code and run:
+After install, restart Claude Code and run:
 
 ```
 /help-agent101
 ```
 
-You should see a full listing of commands, skills, and agent personas. If you see it — Tylor is working.
+You should see a full listing of commands, skills, and agent personas.
 
 ---
 
 ### Troubleshooting
 
-**`agent101: command not found`**
-Your pip bin directory isn't on PATH. Try:
-```bash
-python3 -m agent101 install
-# or find where pip installs scripts:
-python3 -m site --user-base
-# then add {user-base}/bin to your PATH
-```
+**`/help-agent101` not found**
+The plugin may not have loaded. Try:
+1. Restart Claude Code completely
+2. Run `/plugins install GunjanGrunge/tylor` again
 
-**`/help-agent101` not found after restart**
-Check that the MCP entry was written:
-```bash
-cat ~/.claude/settings.json | grep agent101
-```
-If missing, re-run `agent101 install` and restart Claude Code again.
-
-**Python version errors**
+**Python not found / server fails to start**
 Tylor requires Python 3.8+. Check with:
 ```bash
 python3 --version
 ```
+If Python is not on your PATH, install it from [python.org](https://python.org).
 
 ---
 

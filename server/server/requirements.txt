@@ -1,0 +1,21 @@
+# FastMCP / MCP protocol
+mcp[cli]>=1.0.0,<2.0.0
+
+# AWS storage clients
+boto3>=1.34.0,<2.0.0
+botocore>=1.34.0,<2.0.0
+
+# OpenSearch vector search
+opensearch-py>=2.4.0,<3.0.0
+
+# Fuzzy thread name matching
+rapidfuzz>=3.6.0,<4.0.0
+
+# UI server (Thread Visualizer)
+aiohttp>=3.9.0,<4.0.0
+
+# Anthropic SDK (Platform on AWS fallback)
+anthropic>=0.25.0,<1.0.0
+
+# Config / env
+python-dotenv>=1.0.0,<2.0.0
