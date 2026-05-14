@@ -157,7 +157,18 @@ async def handle_index(request: web.Request) -> web.Response:
     index = UI_DIR / "index.html"
     if not index.exists():
         return web.Response(status=404, text="UI not built — run: cd ui && npm run build")
-    return web.FileResponse(index)
+    # Inject the actual bound port so API/WS URLs are always correct,
+    # even when the server falls back to a non-default port (e.g. 8766).
+    html = index.read_text(encoding="utf-8")
+    html = html.replace(
+        "const API = 'http://localhost:8765'",
+        f"const API = 'http://localhost:{PORT}'"
+    ).replace(
+        "const WS  = 'ws://localhost:8765/ws/threads'",
+        f"const WS  = 'ws://localhost:{PORT}/ws/threads'"
+    )
+    return web.Response(text=html, content_type="text/html",
+                        headers={"Cache-Control": "no-store"})
 
 
 async def handle_threads(request: web.Request) -> web.Response:
