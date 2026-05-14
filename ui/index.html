@@ -256,6 +256,26 @@ const STATUS_GLOW = {
   killed:   '0 0 10px rgba(239,80,80,0.3)',
 };
 
+// ── Per-thread unique color ────────────────────
+// 12 visually distinct hues spread around the wheel, all vivid enough
+// to read on the dark background.
+const THREAD_HUES = [195,155,270,30,340,90,220,60,310,120,0,240];
+function threadColor(id, alpha=1){
+  // Simple djb2-style hash on the thread id string
+  let h = 5381;
+  for(let i=0;i<id.length;i++) h = ((h<<5)+h) ^ id.charCodeAt(i);
+  const hue = THREAD_HUES[Math.abs(h) % THREAD_HUES.length];
+  return alpha<1
+    ? `hsla(${hue},85%,65%,${alpha})`
+    : `hsl(${hue},85%,65%)`;
+}
+
+// ── Persistent node positions (survive refresh) ────────────────────
+const POS_KEY = 'tylor_node_positions';
+function loadPositions(){ try{ return JSON.parse(localStorage.getItem(POS_KEY)||'{}'); }catch{ return {}; } }
+function savePosition(id, fx, fy){ const p=loadPositions(); p[id]={fx,fy}; localStorage.setItem(POS_KEY,JSON.stringify(p)); }
+function clearPosition(id){ const p=loadPositions(); delete p[id]; localStorage.setItem(POS_KEY,JSON.stringify(p)); }
+
 // ── SVG setup ─────────────────────────────────
 const svgEl = document.getElementById('viz');
 const W = window.innerWidth, H = window.innerHeight - 54 - 36;
@@ -390,17 +410,22 @@ function buildGraph(){
     const threadDist = Math.min(W, H) * 0.18;
     const totalThreads = alive.length + (killed.length ? 1 : 0);
 
+    const savedPos = loadPositions();
     alive.forEach((t, ti)=>{
       // Fan threads around the hub, evenly spread in a 200° arc
       const arc = Math.min(Math.PI * 1.1, totalThreads * 0.35);
       const tAngle = hAngle + (arc/2) - (totalThreads > 1 ? (arc * ti/(totalThreads-1)) : 0);
+      const nodeId = `thr_${t.id}`;
+      const saved = savedPos[nodeId];
       graphNodes.push({
-        id:`thr_${t.id}`, type:'thread', label:t.title,
+        id: nodeId, type:'thread', label:t.title,
         status:t.status, thread:t, projectIdx:pi, projectId:proj.id,
-        x: hx + threadDist * Math.cos(tAngle),
-        y: hy + threadDist * Math.sin(tAngle),
+        x: saved ? saved.fx : hx + threadDist * Math.cos(tAngle),
+        y: saved ? saved.fy : hy + threadDist * Math.sin(tAngle),
+        fx: saved ? saved.fx : null,   // lock to saved position if user placed it
+        fy: saved ? saved.fy : null,
       });
-      graphLinks.push({ source:projId, target:`thr_${t.id}`, type:'thread' });
+      graphLinks.push({ source:projId, target:nodeId, type:'thread' });
     });
 
     if(killed.length){
@@ -493,7 +518,7 @@ function render(){
       }
       if(d.type==='killed') return 'rgba(239,80,80,0.6)';
       const tn = graphNodes.find(n=>n.id===d.target.id||n.id===d.target);
-      return STATUS_COLOR[tn?.status] || 'rgba(200,200,255,0.35)';
+      return tn ? threadColor(tn.id, 0.5) : 'rgba(200,200,255,0.35)';
     })
     .attr('stroke-width', d=>d.type==='hub' ? 2.2 : 1.4)
     .attr('stroke-dasharray', d=>d.type==='killed' ? '5 3' : null)
@@ -517,7 +542,7 @@ function render(){
         return PROJECT_COLORS[pi%PROJECT_COLORS.length];
       }
       const tn = graphNodes.find(n=>n.id===d.target.id||n.id===d.target);
-      return STATUS_COLOR[tn?.status]||'rgba(200,200,255,0.5)';
+      return tn ? threadColor(tn.id, 0.9) : 'rgba(200,200,255,0.5)';
     })
     .attr('opacity', d=>{
       const tId = typeof d.target==='object' ? d.target.id : d.target;
@@ -571,7 +596,23 @@ function render(){
     .call(d3.drag()
       .on('start', (e,d)=>{ if(!e.active) simulation.alphaTarget(0.2).restart(); d.fx=d.x; d.fy=d.y; })
       .on('drag',  (e,d)=>{ d.fx=e.x; d.fy=e.y; })
-      .on('end',   (e,d)=>{ if(!e.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }));
+      .on('end',   (e,d)=>{
+        if(!e.active) simulation.alphaTarget(0);
+        // Keep node pinned where user dropped it; save to localStorage
+        if(d.type==='thread'){
+          savePosition(d.id, d.fx, d.fy);
+        }
+        // Project hubs: keep pinned but don't persist (they reset on reload)
+      }))
+    .on('dblclick', (e,d)=>{
+      // Double-click a thread node to release it back to the simulation
+      if(d.type==='thread'){
+        d.fx=null; d.fy=null;
+        clearPosition(d.id);
+        simulation.alphaTarget(0.15).restart();
+      }
+      e.stopPropagation();
+    });
 
   nodeEl.each(function(d){
     const g = d3.select(this);
@@ -601,20 +642,34 @@ function render(){
         .text(d.label.length>13 ? d.label.slice(0,12)+'…' : d.label);
 
     } else if(d.type==='thread'){
-      const sc = STATUS_COLOR[d.status]||'rgba(200,200,255,0.5)';
-      // Shrink nodes slightly when many threads — keeps labels readable
+      const tc = threadColor(d.id);                          // unique per-thread color
+      const sc = STATUS_COLOR[d.status]||'rgba(200,200,255,0.5)'; // status ring color
       const sizeFactor = Math.max(0.7, 1 - threadCount * 0.012);
       const r = Math.round((d.status==='active' ? 22 : 18) * sizeFactor);
+      const isPinned = d.fx !== null && d.fx !== undefined;
+      // Outer status ring (thin, shows state)
+      g.append('circle').attr('r',r+3)
+        .attr('fill','none')
+        .attr('stroke', sc)
+        .attr('stroke-width', 1)
+        .attr('opacity', alpha * 0.5)
+        .attr('stroke-dasharray', d.status==='idle'?'3 3':null);
+      // Main node body — colored by thread identity
       g.append('circle').attr('r',r)
         .attr('fill',`rgba(10,10,28,0.88)`)
-        .attr('stroke',sc)
-        .attr('stroke-width', d.status==='active'?2:1.2)
-        .attr('opacity',alpha)
-        .style('filter',isActiveProj && STATUS_GLOW[d.status]!=='none'
-          ? `drop-shadow(0 0 8px ${sc}99)` : 'none');
-      // Status dot
-      g.append('circle').attr('r',4).attr('cx',0).attr('cy',0)
-        .attr('fill',sc).attr('opacity',alpha*0.9);
+        .attr('stroke', tc)
+        .attr('stroke-width', d.status==='active' ? 2.2 : 1.4)
+        .attr('opacity', alpha)
+        .style('filter', isActiveProj && STATUS_GLOW[d.status]!=='none'
+          ? `drop-shadow(0 0 8px ${tc}bb)` : 'none');
+      // Center dot — thread color fill
+      g.append('circle').attr('r', isPinned ? 5 : 4).attr('cx',0).attr('cy',0)
+        .attr('fill', tc).attr('opacity', alpha*0.9);
+      // Pin indicator for locked nodes
+      if(isPinned){
+        g.append('circle').attr('r',2).attr('cx',r-4).attr('cy',-(r-4))
+          .attr('fill','rgba(255,255,255,0.6)').attr('opacity',alpha*0.7);
+      }
       // Label below
       labelG.append('text')
         .attr('x',(d.x||W/2)).attr('y',(d.y||H/2)+r+12)
@@ -1013,13 +1068,13 @@ function updateNodeStatus(thread){
   if(!node) return;
   node.status = thread.status;
 
-  const sc = STATUS_COLOR[thread.status]||'rgba(200,200,255,0.5)';
+  const tc = threadColor(nId);
   const r  = thread.status==='active' ? 22 : 18;
 
   nodeG.selectAll('g.node').filter(d=>d.id===nId)
-    .selectAll('circle:first-child')
+    .selectAll('circle:nth-child(2)')  // main body circle (after status ring)
     .transition().duration(300)
-    .attr('stroke', sc)
+    .attr('stroke', tc)
     .attr('r', r);
 
   // Update silk thread color
@@ -1028,7 +1083,7 @@ function updateNodeStatus(thread){
     return tId === nId;
   })
     .transition().duration(300)
-    .attr('stroke', sc)
+    .attr('stroke', threadColor(nId, 0.5))
     .attr('opacity', thread.projectId===activeProjectId ? 0.7 : 0.18);
 }
 
