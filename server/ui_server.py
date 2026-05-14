@@ -89,12 +89,28 @@ def _fetch_threads() -> list[dict]:
                 "status":        t.get("status", "idle"),
                 "created_at":    t.get("last_activity", ""),
                 "message_count": t.get("message_count", 0),
+                "project":       t.get("project", ""),
             }
             for t in raw
         ]
     except Exception as exc:
         logger.warning("ui_server: could not fetch threads: %s", exc)
         return []
+
+
+def _group_threads_by_project(threads: list[dict]) -> list[dict]:
+    """Group flat thread list into project buckets for the UI."""
+    from collections import OrderedDict
+    buckets: OrderedDict = OrderedDict()
+    for t in threads:
+        proj = t.get("project") or "default"
+        if proj not in buckets:
+            buckets[proj] = []
+        buckets[proj].append(t)
+    return [
+        {"id": name, "name": name, "threads": ts}
+        for name, ts in buckets.items()
+    ]
 
 
 def _fetch_messages(thread_id: str, limit: int = 50) -> list[dict]:
@@ -127,9 +143,10 @@ def _fetch_messages(thread_id: str, limit: int = 50) -> list[dict]:
 
 async def thread_update_payload() -> dict:
     """Build the standard thread_update broadcast payload."""
+    threads = _fetch_threads()
     return {
-        "type":    "thread_update",
-        "threads": _fetch_threads(),
+        "type":     "thread_update",
+        "projects": _group_threads_by_project(threads),
     }
 
 
@@ -145,7 +162,8 @@ async def handle_index(request: web.Request) -> web.Response:
 async def handle_threads(request: web.Request) -> web.Response:
     loop = asyncio.get_running_loop()
     threads = await loop.run_in_executor(None, _fetch_threads)
-    return web.json_response(threads)
+    projects = _group_threads_by_project(threads)
+    return web.json_response({"projects": projects})
 
 
 async def handle_thread_messages(request: web.Request) -> web.Response:
@@ -167,7 +185,7 @@ async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
     # Send full thread state immediately on connect (seq=0 = initial snapshot)
     loop = asyncio.get_running_loop()
     threads_now = await loop.run_in_executor(None, _fetch_threads)
-    initial = {"type": "thread_update", "threads": threads_now, "seq": 0}
+    initial = {"type": "thread_update", "projects": _group_threads_by_project(threads_now), "seq": 0}
     await ws.send_str(json.dumps(initial))
 
     try:

@@ -314,6 +314,19 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "session-start":
+        # Read cwd from Claude Code's stdin JSON payload and persist it
+        try:
+            raw = sys.stdin.read()
+            if raw.strip():
+                payload = json.loads(raw)
+                cwd = payload.get("cwd") or payload.get("session", {}).get("cwd")
+                if cwd:
+                    from pathlib import Path as _Path
+                    proj_file = _Path.home() / ".tylor" / "current_project.txt"
+                    proj_file.parent.mkdir(parents=True, exist_ok=True)
+                    proj_file.write_text(cwd)
+        except Exception:
+            pass
         print(session_start_message())
         return 0
     if args.command == "session-checkpoint":
