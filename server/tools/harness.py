@@ -1,13 +1,9 @@
 """
 server/tools/harness.py — Agent SDK orchestration harness.
 
-The harness gives Claude a team of ROLES with TOOLS.
-Claude brings ALL domain knowledge itself — no cricket agent, no legal agent,
-no pre-built persona for every use case needed.
-
-The supervisor Claude reads the task, picks the right role + tools,
-and spawns sub-agents with that role framing. Sub-agents are Claude
-with a focused lens — not separate knowledge bases.
+5 roles. Claude brings all domain knowledge. No pre-built domain agents.
+Cricket coach, legal review, architecture — all Claude, right lens, right tools.
+Persistent session memory per thread. Interactive with human-in-the-loop.
 """
 from __future__ import annotations
 
@@ -17,45 +13,69 @@ from typing import AsyncIterator
 
 from server.tools._mcp import mcp
 
-
-# ── Roles registry ────────────────────────────────────────────────────────────
-# These are LENSES, not knowledge bases. Claude already knows everything.
-# A role just focuses Claude on the right mode of thinking + tool access.
+# ── 5 roles (lenses, not knowledge bases) ────────────────────────────────────
 
 ROLES = {
     "researcher": {
         "tools": ["WebFetch", "WebSearch", "Read", "Glob", "AskUserQuestion"],
-        "lens": "You are in research mode. Gather information, surface options, present tradeoffs. Ask one focused question at a time.",
+        "lens": (
+            "You are in deep research mode. Gather information thoroughly. "
+            "Surface options with clear tradeoffs. Ask one focused question at a time. "
+            "Never guess — if you need to know something, ask."
+        ),
     },
     "implementer": {
         "tools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "AskUserQuestion"],
-        "lens": "You are in implementation mode. Read the codebase first. Write clean, working code. Show the minimal proof of concept that proves the idea.",
+        "lens": (
+            "You are in implementation mode. Always read the existing code before changing anything. "
+            "Write clean, working code. When prototyping during planning: 50 lines max that proves "
+            "the concept. When building for real: production quality. "
+            "If you spot issues in adjacent areas (e.g. you're fixing backend but see a frontend bug), "
+            "flag them proactively."
+        ),
     },
     "reviewer": {
         "tools": ["Read", "Glob", "Grep", "AskUserQuestion"],
-        "lens": "You are in review mode. Read everything relevant. Give specific, actionable feedback. Identify gaps, risks, and improvements.",
+        "lens": (
+            "You are in review mode. Read everything relevant before giving feedback. "
+            "Be specific and actionable — no vague 'improve this'. "
+            "Surface risks, gaps, and improvements the user hasn't thought of. "
+            "If you spot compliance or legal issues, flag them explicitly."
+        ),
     },
     "planner": {
         "tools": ["Read", "Write", "Glob", "AskUserQuestion"],
-        "lens": "You are in planning mode. Structure the work. Break it into clear steps. Ask clarifying questions before planning, not after.",
+        "lens": (
+            "You are in planning mode. Structure the work clearly. "
+            "Ask exactly what you need to know before planning — not after. "
+            "Break work into concrete steps. Identify dependencies and risks upfront."
+        ),
     },
     "drafter": {
         "tools": ["Read", "Write", "AskUserQuestion"],
-        "lens": "You are in drafting mode. Produce well-structured written output — specs, docs, policies, PRDs, copy. Ask what you need to know before drafting.",
+        "lens": (
+            "You are in drafting mode. Produce polished written output: "
+            "specs, docs, policies, PRDs, copy, legal documents. "
+            "Ask the minimum necessary questions before drafting. "
+            "Ask about: who the audience is, what jurisdiction/context applies, "
+            "what decisions are already made. Then produce complete, ready-to-use output."
+        ),
     },
 }
 
 
 def _get_bmad_path() -> str | None:
-    config_file = Path.home() / ".tylor" / "config.json"
-    if config_file.exists():
-        try:
-            cfg = json.loads(config_file.read_text())
-            p = cfg.get("bmad_path")
-            if p and Path(p).exists():
-                return p
-        except Exception:
-            pass
+    for p in [
+        Path.home() / ".tylor" / "config.json",
+    ]:
+        if p.exists():
+            try:
+                cfg = json.loads(p.read_text())
+                bmad = cfg.get("bmad_path")
+                if bmad and Path(bmad).exists():
+                    return bmad
+            except Exception:
+                pass
     for path in [Path.home() / ".tylor" / "bmad",
                  Path.home() / ".claude" / "plugins" / "bmad"]:
         if path.exists():
@@ -63,59 +83,59 @@ def _get_bmad_path() -> str | None:
     return None
 
 
-# ── Supervisor prompt ─────────────────────────────────────────────────────────
-
 def build_supervisor_prompt(thread_name: str, cwd: str | None, bmad_path: str | None) -> str:
-    bmad_line = (
-        f"\nBMAD structured methodology available at {bmad_path} — use it for "
-        "PRDs, architecture docs, epics when structured output would help."
-        if bmad_path else ""
-    )
+    context_lines = []
+    if thread_name:
+        context_lines.append(f"Active thread: {thread_name}")
+    if cwd:
+        context_lines.append(f"Project: {cwd}")
+    if bmad_path:
+        context_lines.append(
+            f"BMAD methodology available at {bmad_path} — use for structured PRDs, "
+            "architecture docs, epics when the task calls for formal structured output."
+        )
+    context_block = "\n".join(context_lines)
 
-    return f"""You are a proactive supervisor working in the thread: "{thread_name or 'General'}".
-{bmad_line}
+    return f"""You are a proactive supervisor in thread: "{thread_name or 'General'}".
+{context_block}
 
-You have access to sub-agents via the Agent tool. Each sub-agent is YOU with a focused role.
-You do NOT need pre-built agents for specific domains — you already know everything.
-A cricket coach asking about an app gets the same Claude that knows cricket AND software.
+You have access to 5 sub-agent roles via the Agent tool:
+- researcher  (WebSearch, WebFetch, Read) — gather info, surface options
+- implementer (Read, Write, Edit, Bash)   — build, fix, prototype
+- reviewer    (Read, Glob, Grep)          — audit, feedback, risk
+- planner     (Read, Write)               — structure, breakdown, roadmap
+- drafter     (Read, Write)               — docs, specs, policies, PRDs
 
-## When to spawn sub-agents
+YOU provide all domain knowledge. Cricket, legal, medical, finance — you know it all.
+Roles are just modes of working, not separate knowledge bases.
 
-Spawn when the task genuinely benefits from parallel or sequential focused work:
-- Complex task with distinct phases (research → plan → implement → review)
-- Task needs both broad thinking AND detailed execution at the same time
-- Output quality improves with role separation (drafter + reviewer)
+## Core behaviours
 
-Do NOT spawn for simple tasks — just answer directly.
+**Spawn agents when the task has distinct phases or needs focused execution.**
+Don't spawn for simple answers — just answer directly.
 
-## How to spawn
+**Be proactive.** If you notice something the user hasn't asked about:
+- Architecture ambiguity → spawn reviewer to map tradeoffs before the user commits
+- Implementation unclear → spawn implementer for a quick proof of concept
+- Legal/compliance risk → flag it, offer to draft the required document
+- Cross-thread issue → "this looks like it affects the frontend too — want me to fix it there?"
 
-Pick a role from: researcher, implementer, reviewer, planner, drafter.
-Brief the sub-agent with ALL context it needs — don't make it start cold.
-Pass prior decisions, constraints, and relevant thread history.
+**Ask questions before acting, not after.**
+Use AskUserQuestion when you need information to proceed correctly.
+Ask ONE focused question at a time. Never ask 5 things at once.
 
-## Proactive behaviour
+**Present decisions as options:**
+Format: "Option A: [pros/cons]. Option B: [pros/cons]. I recommend X because Y."
+Then ask for the decision.
 
-If you notice the conversation needs something the user hasn't asked for yet:
-- Architecture ambiguity → spawn reviewer to map tradeoffs: "Option A vs B — your call"
-- Implementation unclear → spawn implementer for a 50-line proof of concept
-- Document needed → spawn drafter to produce it
+**Thread memory is your context.**
+Reference prior decisions naturally. Never re-ask what's already been answered.
 
-Present these proactively, briefly. "Here's what the architect found — your call."
-
-## Decision pattern
-
-Present options as: "[Option A]: pros/cons. [Option B]: pros/cons. My recommendation: X because Y."
-Then ask ONE question to get the decision.
-
-## Memory
-
-Everything in this thread is your context. Reference prior decisions naturally.
-Don't re-ask what's already been answered.
+**Token efficiency.**
+Use the minimum context needed. Don't repeat information already in the thread.
+Brief sub-agents with only what they need — not the entire conversation history.
 """
 
-
-# ── Agent definitions ─────────────────────────────────────────────────────────
 
 def build_agent_registry() -> dict:
     try:
@@ -123,14 +143,14 @@ def build_agent_registry() -> dict:
     except ImportError:
         return {}
 
-    registry = {}
-    for role_name, role in ROLES.items():
-        registry[role_name] = AgentDefinition(
-            description=f"{role_name.capitalize()} role: {role['lens'][:120]}",
+    return {
+        name: AgentDefinition(
+            description=f"{name}: {role['lens'][:100]}",
             prompt=role["lens"],
             tools=role["tools"],
         )
-    return registry
+        for name, role in ROLES.items()
+    }
 
 
 # ── Session persistence ───────────────────────────────────────────────────────
@@ -171,7 +191,11 @@ async def run_with_agents(
     cwd: str | None = None,
 ) -> AsyncIterator[str]:
     try:
-        from claude_agent_sdk import query, ClaudeAgentOptions, PermissionResultAllow
+        from claude_agent_sdk import (
+            query, ClaudeAgentOptions,
+            PermissionResultAllow, PermissionResultDeny,
+        )
+        from claude_agent_sdk.types import HookMatcher, ToolPermissionContext
     except ImportError:
         yield "⚠️  Agent SDK not installed. Run: pip install claude-agent-sdk"
         return
@@ -180,45 +204,77 @@ async def run_with_agents(
     system_prompt = build_supervisor_prompt(thread_name, cwd, bmad_path)
     agent_registry = build_agent_registry()
 
-    pending_questions: list[str] = []
+    # Collect questions from AskUserQuestion so we can surface them
+    pending_questions: list[dict] = []
 
-    async def can_use_tool(ctx):
-        tool = getattr(ctx, "tool_name", "") or getattr(ctx, "toolName", "")
-        tool_input = getattr(ctx, "tool_input", {}) or {}
-        if tool == "AskUserQuestion":
-            for q in tool_input.get("questions", []):
-                q_text = q.get("question", str(q)) if isinstance(q, dict) else str(q)
-                pending_questions.append(q_text)
-        return PermissionResultAllow(updated_input=tool_input)
+    async def can_use_tool(
+        tool_name: str,
+        input_data: dict,
+        context: ToolPermissionContext,
+    ) -> PermissionResultAllow | PermissionResultDeny:
+        """
+        Human-in-the-loop: intercept AskUserQuestion and surface to user.
+        All other tools auto-allowed — agents work autonomously.
+        """
+        if tool_name == "AskUserQuestion":
+            # Collect questions — they'll be yielded before the next content chunk
+            for q in input_data.get("questions", []):
+                pending_questions.append(q)
+            # Return questions back so agent knows we received them
+            return PermissionResultAllow(updated_input=input_data)
+
+        # All other tools: auto-allow
+        return PermissionResultAllow(updated_input=input_data)
+
+    # Required: dummy PreToolUse hook keeps stream open for can_use_tool
+    async def _keep_stream_open(input_data: dict, tool_use_id: str, context) -> dict:
+        return {"continue_": True}
 
     session_id = _load_session_id(thread_id)
 
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
-        allowed_tools=["Read", "Write", "Edit", "Bash", "Glob", "Grep",
-                        "WebFetch", "WebSearch", "AskUserQuestion", "Agent"],
+        allowed_tools=[
+            "Read", "Write", "Edit", "Bash", "Glob", "Grep",
+            "WebFetch", "WebSearch", "AskUserQuestion", "Agent",
+        ],
         agents=agent_registry,
         resume=session_id,
         cwd=cwd,
         can_use_tool=can_use_tool,
+        hooks={
+            "PreToolUse": [HookMatcher(matcher=None, hooks=[_keep_stream_open])]
+        },
     )
 
     new_session_id: str | None = None
     try:
         async for msg in query(prompt=message, options=options):
 
+            # Capture session ID from init message
             if hasattr(msg, "subtype") and msg.subtype == "init":
-                sid = getattr(msg, "session_id", None) or (
-                    (msg.data or {}).get("session_id") if hasattr(msg, "data") else None
-                )
+                sid = getattr(msg, "session_id", None)
+                if not sid and hasattr(msg, "data") and isinstance(msg.data, dict):
+                    sid = msg.data.get("session_id")
                 if sid:
                     new_session_id = sid
 
+            # Surface any pending questions to the user before next content
             if pending_questions:
                 for q in pending_questions:
-                    yield f"\n❓ **{q}**\n"
+                    if isinstance(q, dict):
+                        header = q.get("header", "")
+                        question = q.get("question", "")
+                        options_list = q.get("options", [])
+                        yield f"\n❓ **{header + ': ' if header else ''}{question}**"
+                        for opt in options_list:
+                            yield f"\n  • {opt.get('label', '')}: {opt.get('description', '')}"
+                        yield "\n"
+                    else:
+                        yield f"\n❓ **{q}**\n"
                 pending_questions.clear()
 
+            # Stream text content
             content = getattr(msg, "content", None) or getattr(msg, "text", None)
             if isinstance(content, str) and content:
                 yield content
@@ -235,15 +291,20 @@ async def run_with_agents(
 @mcp.tool()
 async def run_in_thread(thread_id: str, message: str, cwd: str | None = None) -> str:
     """
-    Run a task in a thread. Claude uses its own knowledge for any domain —
-    cricket, legal, medical, architecture, whatever. No pre-built agents needed.
-    The harness provides focused roles (researcher, implementer, planner, etc.)
-    and Claude picks the right one(s) for the task.
+    Run a task in a thread using the agent harness.
+
+    Claude uses its own knowledge for any domain. The harness provides
+    5 roles (researcher, implementer, reviewer, planner, drafter) and
+    Claude picks the right one(s) based on the task.
+
+    Persistent memory: each thread has its own session — full conversation
+    history preserved across sessions. Agents are interactive and ask
+    focused questions when they need information to proceed.
 
     Args:
         thread_id: Active thread ID.
         message: What you want done.
-        cwd: Project directory (optional).
+        cwd: Project directory (optional, defaults to current).
     """
     thread_name = ""
     try:
@@ -262,15 +323,20 @@ async def run_in_thread(thread_id: str, message: str, cwd: str | None = None) ->
 @mcp.tool()
 def list_available_roles() -> dict:
     """
-    List the roles the supervisor can assign to sub-agents.
-    Claude picks roles based on the task — you don't need to specify.
+    Show the 5 roles the supervisor can assign to sub-agents.
+    Claude picks the right role(s) — you never need to specify.
     """
     return {
-        "roles": {name: role["lens"] for name, role in ROLES.items()},
-        "note": (
-            "These are lenses, not knowledge bases. Claude already knows everything. "
-            "A role just focuses Claude on the right mode (research vs implement vs review). "
-            "No cricket agent needed — Claude knows cricket."
+        "roles": {name: role["lens"][:120] for name, role in ROLES.items()},
+        "how_it_works": (
+            "Roles are lenses. Claude brings all domain knowledge. "
+            "No pre-built agents for cricket, legal, medical, etc. needed. "
+            "Claude IS the expert. Roles just focus it: research vs implement vs review."
         ),
-        "bmad_available": _get_bmad_path() is not None,
+        "memory": (
+            "Each thread has a persistent Agent SDK session. "
+            "Full conversation history saved automatically. "
+            "SwThread resumes the session — zero re-priming."
+        ),
+        "bmad": f"BMAD available: {_get_bmad_path() is not None}",
     }
