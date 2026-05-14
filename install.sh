@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tylor installer
-# Usage: ./install.sh
+# Usage: ./install.sh [project|personal]
 # bash 3.2+ compatible (macOS default shell)
 
 set -euo pipefail
@@ -19,20 +19,26 @@ fail() { echo -e "  ${RED}✗${NC} $*"; }
 warn() { echo -e "  ${YELLOW}⚠${NC}  $*"; }
 header() { echo -e "\n${BOLD}$*${NC}"; }
 
-# ---------------------------------------------------------------------------
-# 0. Select storage mode (Project JSON vs Personal DynamoDB)
-# ---------------------------------------------------------------------------
-select_storage_mode() {
-  header "Select storage mode"
-  echo "  [1] Project (local JSON) — zero AWS setup, single-machine only"
-  echo "  [2] Personal (AWS DynamoDB) — persistent, multi-machine (default)"
-  echo ""
-  printf "  Choice [2]: "
-  read -r choice </dev/tty || choice=""
+# Parse command line arguments
+STORAGE_MODE="${1:-project}"
 
+if [ "$STORAGE_MODE" != "project" ] && [ "$STORAGE_MODE" != "personal" ]; then
+  echo "Usage: $0 [project|personal]"
+  echo ""
+  echo "Modes:"
+  echo "  project  - Local JSON storage, zero AWS setup (default)"
+  echo "  personal - AWS DynamoDB storage, persistent across machines"
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# 0. Configure storage mode
+# ---------------------------------------------------------------------------
+configure_storage_mode() {
+  header "Configuring storage mode: $STORAGE_MODE"
   mkdir -p "$CONFIG_DIR"
 
-  if [ "$choice" = "1" ]; then
+  if [ "$STORAGE_MODE" = "project" ]; then
     python3 - <<PYEOF
 import json
 from pathlib import Path
@@ -217,19 +223,13 @@ main() {
 
   ERRORS=0
 
-  select_storage_mode
+  configure_storage_mode
   install_deps   || ERRORS=$((ERRORS + 1))
   patch_settings_json || ERRORS=$((ERRORS + 1))
   init_registry
   validate_startup   || ERRORS=$((ERRORS + 1))
 
   # AWS steps: skip entirely in Project mode
-  STORAGE_MODE="$(python3 -c "
-import json, pathlib
-cfg = pathlib.Path('$CONFIG_DIR/config.json')
-print(json.loads(cfg.read_text()).get('storage_mode','personal') if cfg.exists() else 'personal')
-" 2>/dev/null || echo "personal")"
-
   if [ "$STORAGE_MODE" = "personal" ]; then
     validate_aws
     provision_aws
@@ -243,9 +243,14 @@ print(json.loads(cfg.read_text()).get('storage_mode','personal') if cfg.exists()
     echo -e "${GREEN}${BOLD}Tylor installed ✓${NC}"
     echo ""
     echo "  Next steps:"
-    echo "  1. Restart Claude Code to load the MCP server"
-    echo "  2. Run Story 1.2 setup to validate AWS credentials (if using Personal mode)"
-    echo "  3. Type /help-agent101 in Claude Code to see all available commands"
+    if [ "$STORAGE_MODE" = "project" ]; then
+      echo "  1. Restart Claude Code to load the MCP server"
+      echo "  2. Type /help-agent101 in Claude Code to see all available commands"
+    else
+      echo "  1. Restart Claude Code to load the MCP server"
+      echo "  2. Add your AWS credentials to server/.env (see server/.env.example)"
+      echo "  3. Type /help-agent101 in Claude Code to see all available commands"
+    fi
   else
     echo -e "${RED}${BOLD}Installation completed with $ERRORS error(s) — see messages above${NC}"
     exit 1

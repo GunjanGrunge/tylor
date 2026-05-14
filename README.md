@@ -27,20 +27,24 @@ CT Gemma Fine-Tuning  → new thread, clean slate
 
 ## Installation
 
-**Requirements:** macOS or Linux, Python 3.11+, Claude Code
+**Requirements:** macOS or Linux, Python 3.8+, Claude Code
 
 ### One-line install
 
 ```bash
 git clone https://github.com/GunjanGrunge/tylor ~/.claude/plugins/tylor
-cd ~/.claude/plugins/tylor && ./install.sh
+cd ~/.claude/plugins/tylor && ./install.sh project
 ```
 
-The installer will ask you to choose a storage mode:
+For personal use with AWS persistence:
+
+```bash
+cd ~/.claude/plugins/tylor && ./install.sh personal
+```
 
 | Mode | Setup | Best for |
 |---|---|---|
-| **Project JSON** (recommended) | Zero config | Getting started, single machine |
+| **Project JSON** (default) | Zero config | Getting started, single machine |
 | **Personal DynamoDB** | AWS credentials required | Multi-machine, production use |
 
 ### After install
