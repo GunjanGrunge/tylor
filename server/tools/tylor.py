@@ -91,7 +91,7 @@ def _get_db():
     if use_dynamo:
         from server.storage.dynamo import DynamoClient
         return DynamoClient(
-            table_name=dynamo_table,
+            table_name=os.environ.get("DYNAMO_TABLE", "agent101"),
             user_id=config.get("user_id", "default"),
             profile=config.get("aws_profile"),
         )

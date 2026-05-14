@@ -20,6 +20,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 logger = logging.getLogger(__name__)
 
 STORE_VERSION = "1.0"
+WARN_THRESHOLD = 400 * 1024  # 400 KB — kept for backward compat with tests
 
 _EMPTY_STORE: dict = {"version": STORE_VERSION, "threads": [], "current_thread_id": None}
 
@@ -49,7 +50,8 @@ class JsonStore:
 
     def _load(self) -> dict:
         if not self.path.exists():
-            return dict(_EMPTY_STORE)
+            import copy
+            return copy.deepcopy(_EMPTY_STORE)
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
             data.setdefault("threads", [])
@@ -61,9 +63,16 @@ class JsonStore:
 
     def _save(self, data: dict) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        raw = json.dumps(data, indent=2, ensure_ascii=False)
+        if len(raw.encode()) > WARN_THRESHOLD:
+            logger.warning(
+                "Thread store approaching file size limit (%d KB) — "
+                "consider DynamoDB mode for large datasets",
+                len(raw.encode()) // 1024,
+            )
         tmp = self.path.with_suffix(".tmp")
         try:
-            tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+            tmp.write_text(raw, encoding="utf-8")
             os.replace(tmp, self.path)
         except OSError:
             tmp.unlink(missing_ok=True)
