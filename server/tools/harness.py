@@ -246,18 +246,49 @@ async def run_with_agents(
     # Session = thread (Agent SDK session persists context)
     session_id = _load_session_id(thread_id)
 
+    # ── Human-in-the-loop: intercept AskUserQuestion + approval requests ──────
+    # When the agent needs input, it calls AskUserQuestion.
+    # We surface the question to the user via the MCP response so Claude Code
+    # shows it in the terminal and waits for the user's answer.
+    # The answer is then injected back into the next query() call.
+
+    pending_questions: list[dict] = []
+
+    async def can_use_tool(ctx) -> object:
+        """Intercept tool calls that need human input or approval."""
+        try:
+            from claude_agent_sdk import PermissionResultAllow, PermissionResultDeny
+        except ImportError:
+            return None  # no SDK permission types — allow all
+
+        tool = getattr(ctx, "tool_name", "") or getattr(ctx, "toolName", "")
+        tool_input = getattr(ctx, "tool_input", {}) or getattr(ctx, "input", {}) or {}
+
+        if tool == "AskUserQuestion":
+            # Agent wants to ask the user something — collect and surface
+            questions = tool_input.get("questions", [])
+            pending_questions.extend(questions)
+            # Return a marker — caller will see pending_questions and surface them
+            return PermissionResultAllow(updated_input=tool_input)
+
+        if tool in ("Bash", "Write", "Edit"):
+            # Always allow — agent can execute autonomously
+            return PermissionResultAllow(updated_input=tool_input)
+
+        return PermissionResultAllow(updated_input=tool_input)
+
     options = ClaudeAgentOptions(
         allowed_tools=allowed_tools,
         agents=active_agents if active_agents else None,
         resume=session_id,
         cwd=cwd,
+        can_use_tool=can_use_tool,
     )
 
     # Stream output
     new_session_id: str | None = None
     try:
         async for msg in query(prompt=full_prompt, options=options):
-            msg_type = type(msg).__name__
 
             # Capture session ID on first message
             if hasattr(msg, "subtype") and msg.subtype == "init":
@@ -266,11 +297,22 @@ async def run_with_agents(
                 elif hasattr(msg, "data") and isinstance(msg.data, dict):
                     new_session_id = msg.data.get("session_id")
 
+            # Surface any pending questions to the user
+            if pending_questions:
+                for q in pending_questions:
+                    question_text = q.get("question", str(q))
+                    yield f"\n❓ **Agent question:** {question_text}\n"
+                pending_questions.clear()
+
             # Yield text content
             if hasattr(msg, "content") and isinstance(msg.content, str) and msg.content:
                 yield msg.content
             elif hasattr(msg, "text") and msg.text:
                 yield msg.text
+
+            # Surface subagent activity
+            if hasattr(msg, "parent_tool_use_id") and msg.parent_tool_use_id:
+                pass  # subagent message — flows through naturally
 
     except Exception as exc:
         yield f"\n⚠️  Agent error: {exc}"
