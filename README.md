@@ -1,68 +1,120 @@
 # Tylor — the tailor to your threads
 
-> A Claude Code plugin that eliminates session death.
+> Claude Code plugin that gives Claude persistent memory, focused context, and a team of specialists — so every session picks up exactly where you left off.
 
-Tylor gives Claude persistent, isolated named context scopes called **threads** — so every session picks up exactly where you left off, across multiple projects, with zero re-priming.
+**No database. No cloud account. No configuration. Just install and go.**
 
-```
-CT Backend API        → new thread, clean slate
-SwThread Backend      → instant context switch, no re-explanation
-/open-threads-ui      → live neural network dashboard of all your work
-```
-
-No database. No cloud account. No configuration. Just install and go.
-
-> **Tylor runs inside Claude Code using Claude itself** — no separate AI, no extra API keys. It gives Claude the memory and tools it was missing.
+> Tylor runs inside Claude Code using Claude itself — no separate AI, no extra API keys needed for core features.
 
 ---
 
 ## What it does
 
-| Problem | Tylor's answer |
-|---|---|
-| Every Claude session forgets you | **Persistent threads** — context survives restarts, machine reboots, and version updates |
-| Switching topics loses context | **`SwThread`** — atomic context switch in under 2 seconds |
-| "Where was that file again?" | **Silent code indexing** — Claude navigates directly to the right file and line without re-scanning |
-| Can't see what's running | **Thread Visualizer** at `localhost:8765` — live neural network graph of all threads |
-| Need specialists for different tasks | **Personas** — CEO, CTO, Analyst, Code Agent per thread |
-| Want Claude to work while you sleep | **AFK mode** — autonomous execution with automatic failure recovery |
+Every time you open Claude Code, you start from zero. Tylor fixes that.
+
+You work in **threads** — named, persistent conversations that survive restarts, machine reboots, and version updates. Each thread remembers everything: what was built, what was decided, what files were touched. You never re-explain yourself.
+
+When you work inside a thread, Tylor quietly brings in the right help. Discussing a product idea? Claude structures the thinking and drafts the document. Writing code? Claude reads the codebase first, then acts. Need a privacy policy? Claude asks the two questions it actually needs, then writes it — no hallucination, no guessing.
+
+Multiple threads run in parallel. Switch between them instantly. See them all live in the visual dashboard.
+
+---
+
+## What you can do
+
+### Work in threads
+
+```
+CT Backend API          → start a new thread for backend work
+CT Frontend UI          → separate thread for frontend
+CT Product Planning     → planning thread with full product memory
+SwThread Backend        → switch back to backend instantly
+/list-threads           → see all threads and their status
+```
+
+Every thread remembers your full conversation history. When you come back tomorrow, Claude picks up exactly where you left off — no "let me remind you what we were doing."
+
+### Run tasks with a team
+
+```
+/run check if the frontend is polished
+/run design a cricket coaching app — ask me what you need
+/run add a privacy policy to the signup flow
+/run we need real-time collaboration — what are my options?
+```
+
+Claude figures out what the task needs and handles it. If it needs to research options, it researches. If it needs to read your codebase first, it reads. If it needs to ask you a question before acting, it asks one focused question — not five.
+
+When a task touches multiple areas, Claude coordinates internally. You get a single coherent answer.
+
+### Interactive agents that ask before they act
+
+Claude doesn't guess. When it needs information to do the job right, it asks:
+
+```
+❓ What data does your app collect?
+❓ Which jurisdictions apply — GDPR, CCPA, or both?
+```
+
+You answer, it acts. No hallucinated policies. No invented cricket rules.
+
+### Cross-thread awareness
+
+Claude sees all your open threads. When a conversation starts going somewhere that deserves its own space, it suggests it naturally:
+
+```
+"This is growing into frontend territory — 
+ you might want a Frontend thread for this work."
+```
+
+You decide. Claude never switches threads for you.
+
+### See everything live
+
+```
+/open-threads-ui
+```
+
+Opens `http://localhost:8765` — a live visual dashboard showing all your threads across projects. See what's active, what's idle, what's archived. Click any thread to read its full history.
+
+### AFK execution
+
+```
+/set-sandbox ~/my-project
+/run fix all failing tests and make a PR summary
+```
+
+Claude works autonomously in your declared project folder. It recovers from errors automatically and logs every decision. Check status anytime with `/afk-status`.
 
 ---
 
 ## Installation
 
-**Requirements:** Python 3.8+ · One of: Claude Code CLI, Claude Desktop, or VSCode with Claude extension
+**Requirements:** Python 3.8+ · Claude Code, Claude Desktop, or VSCode with Claude extension
 
 Works on **macOS, Windows, Linux, and WSL**.
 
-### Step 1 — Clone the repo
+### Step 1 — Clone
 
 ```bash
 git clone https://github.com/GunjanGrunge/tylor ~/.claude/plugins/GunjanGrunge/tylor
 ```
 
-### Step 2 — Run the installer
+### Step 2 — Install
 
 ```bash
 python3 ~/.claude/plugins/GunjanGrunge/tylor/install.py
 ```
 
-The installer automatically:
-- Creates a Python virtual environment at `~/.tylor/venv`
-- Installs all dependencies
-- Patches **Claude Code CLI** (`~/.claude/settings.json`)
-- Patches **Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json` on Mac, `%APPDATA%\Claude\` on Windows)
-- VSCode extension uses the same config as Claude Code CLI — no extra step needed
+**Windows:**
+```
+python %USERPROFILE%\.claude\plugins\GunjanGrunge\tylor\install.py
+```
 
-You should see:
-```
-  ✓ Python environment ready
-  ✓ Storage mode: Project (local JSON, no AWS needed)
-  ✓ Patched ~/.claude/settings.json
-  ✓ Patched ~/Library/Application Support/Claude/claude_desktop_config.json
-  ✓ MCP server validates correctly (name: agent101)
-  ✓ Tylor installed successfully!
-```
+The installer:
+- Sets up a Python environment automatically
+- Registers Tylor with Claude Code CLI, Claude Desktop, and VSCode — all at once
+- No AWS account, no API keys, no configuration needed
 
 ### Step 3 — Restart your Claude client
 
@@ -70,161 +122,115 @@ Quit and reopen Claude Code, Claude Desktop, or VSCode.
 
 ### Step 4 — Verify
 
-Type in any Claude session:
-
 ```
 /help-agent101
 ```
 
-You should see the full command listing. If you see it — Tylor is running.
-
----
-
-## Troubleshooting
-
-**`/help-agent101` not found after restart**
-
-1. Re-run the installer: `python3 ~/.claude/plugins/GunjanGrunge/tylor/install.py`
-2. Restart your Claude client completely
-3. Check the MCP server is listed in your client's settings under MCP servers
-
-**Python not found**
-
-Tylor requires Python 3.8+. Check: `python3 --version`
-If missing, install from [python.org](https://python.org) and restart your terminal.
-
-**Windows: use `python` instead of `python3`**
-
-```
-python %USERPROFILE%\.claude\plugins\GunjanGrunge\tylor\install.py
-```
-
-**First session takes longer**
-
-Normal — first run installs Python dependencies. Subsequent starts are instant.
+If you see the command listing, Tylor is running.
 
 ---
 
 ## Quick start
 
 ```
-# Create your first thread
-CT My Project
+# Open any project in Claude Code
 
-# Create domain-specific threads
-CT Backend API
-CT Frontend UI
-CT PRD Planning
+CT My First Project          ← create your first thread
 
-# Switch between threads instantly — no re-priming
-SwThread Backend
-SwThread Frontend
+/run what is in this codebase?    ← Claude reads and summarises
 
-# See all threads
-/list-threads
+CT Backend                   ← create a backend thread
+/run fix the authentication bug
 
-# Open the live visual dashboard
-/open-threads-ui
+CT Frontend                  ← separate frontend thread
+/run the signup form needs improvement
+
+SwThread Backend             ← switch back, full context intact
+/run add JWT refresh tokens
+
+/list-threads                ← see all threads
+/open-threads-ui             ← open the visual dashboard
 ```
 
 ---
 
-## Thread Visualizer
+## How threads work
 
-Open `http://localhost:8765` in your browser — a live neural network graph of all your threads across projects.
+A thread is a persistent, named workspace. Everything you discuss in a thread stays there — decisions, code written, files read, questions answered.
 
-- **Click any thread node** → message history panel slides in
-- **Click a project hub** → focuses that project's cluster
-- Threads update live as you work
-- Drag nodes to rearrange
+When you switch threads, you switch context. The backend thread doesn't know what the frontend thread discussed. This is intentional — it keeps focus sharp and token usage low.
+
+When you come back to a thread tomorrow, Claude has full memory of it. No re-priming. No "as I mentioned before." Just work.
+
+**Thread status:**
+- `active` — currently in use
+- `idle` — paused, full memory preserved
+- `killed` — archived with an AI-generated summary
 
 ---
 
-## Core commands
+## Commands
 
-### Thread lifecycle
+### Thread management
 
 | Command | What it does |
 |---|---|
 | `CT [name]` or `/new-thread` | Create a new named thread |
-| `SwThread [name]` | Switch to a thread — fuzzy name matching |
-| `/list-threads` | List all threads with status and message count |
-| `KillThread [name]` or `/kill-thread` | Archive a thread with an AI-generated summary |
-| `/recall [query]` | Search thread memory |
+| `SwThread [name]` | Switch to a thread — fuzzy matching works |
+| `/list-threads` | All threads with status |
+| `KillThread [name]` or `/kill-thread` | Archive with summary |
+| `/recall [query]` | Search memory across a thread |
 
-### Silent code indexing
+### Running tasks
 
-Every time Claude reads or writes a file, Tylor silently records key symbols:
-
-```
-SignIn: src/components/auth/SignIn.tsx:89
-useAuth: src/hooks/auth.ts:12
-```
-
-Next session, Claude goes directly to the right file — no codebase scanning.
-
-### Agent personas
-
-Spawn a specialist inside the active thread:
-
-```
-spawn_agent(persona="cto", thread_id=..., task="Design the database schema")
-```
-
-| Persona | Role |
+| Command | What it does |
 |---|---|
-| `ceo` | Strategy, prioritisation |
-| `cto` | Architecture, system design |
-| `analyst` | Research, data analysis |
-| `code_agent` | Implementation, debugging |
+| `/run [task]` | Run any task — Claude handles the rest |
+| `/list-available-roles` | See what capabilities are available |
 
-### AFK execution
+### Autonomous execution
 
-```
-/set-sandbox ~/my-project
-start_afk(task="Refactor the auth module and make the tests pass")
-```
+| Command | What it does |
+|---|---|
+| `/set-sandbox [path]` | Declare the folder Claude can work in |
+| `start_afk(task="...")` | Hand off a task, walk away |
+| `/afk-status` | Check what's running |
 
-Claude executes autonomously, recovers from failures, and logs every decision to the thread.
+### Visualizer
+
+| Command | What it does |
+|---|---|
+| `/open-threads-ui` | Open live dashboard at localhost:8765 |
 
 ---
 
 ## Storage
 
-Threads are stored as a local JSON file at `~/.tylor/threads.json`.
+Everything is stored locally at `~/.tylor/threads.json`.
 
-**No database. No AWS. No cloud account required.**
-
-A year of heavy daily use (50 threads, 10,000 messages) fits comfortably under 10 MB.
+No database. No cloud. No AWS. A year of heavy daily use fits under 10 MB.
 
 ---
 
-## Architecture
+## Troubleshooting
 
-```
-Claude Code (terminal)
-  └── Tylor MCP server (Python · FastMCP · stdio)
-        ├── Thread tools:  new_thread, switch_thread, kill_thread, recall_memory
-        ├── Agent tools:   spawn_agent, list_personas
-        ├── Executor:      sandboxed bash + AFK autonomous execution
-        └── UI server:     aiohttp at localhost:8765
+**`/help-agent101` not found after restart**
+1. Re-run: `python3 ~/.claude/plugins/GunjanGrunge/tylor/install.py`
+2. Restart your Claude client completely
 
-Storage: ~/.tylor/threads.json (local JSON, zero config)
+**Python not found**
+Install Python 3.8+ from [python.org](https://python.org)
 
-Hooks (Claude Code lifecycle)
-  ├── SessionStart  → injects active thread context (zero re-priming)
-  ├── Stop          → checkpoints thread state
-  └── PostToolUse   → silent code indexing on file reads/writes
-```
+**First session is slow**
+Normal — first run installs dependencies. Takes ~30 seconds once.
 
 ---
 
 ## Roadmap
 
-- [ ] Claude Agent SDK migration (June 2026)
-- [ ] ECC skill implementations (web scrape, diagrams, pipelines)
+- [ ] Claude Agent SDK migration complete (June 2026)
 - [ ] Community skill registry
-- [ ] Multi-machine sync (optional DynamoDB for power users)
+- [ ] Multi-machine sync (optional)
 
 ---
 
@@ -234,4 +240,4 @@ MIT
 
 ---
 
-*Built with Claude Code. Named after the tailor who works with threads.*
+*Named after the tailor who works with threads.*
