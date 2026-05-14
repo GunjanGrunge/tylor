@@ -20,7 +20,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 logger = logging.getLogger(__name__)
 
 STORE_VERSION = "1.0"
-WARN_THRESHOLD = 400 * 1024  # 400 KB — kept for backward compat with tests
+WARN_THRESHOLD = 400 * 1024  # 400 KB
 
 _EMPTY_STORE: dict = {"version": STORE_VERSION, "threads": [], "current_thread_id": None}
 
@@ -49,8 +49,8 @@ class JsonStore:
     # ── Internal load/save ─────────────────────────────────────────────
 
     def _load(self) -> dict:
+        import copy
         if not self.path.exists():
-            import copy
             return copy.deepcopy(_EMPTY_STORE)
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
@@ -59,15 +59,19 @@ class JsonStore:
             return data
         except (json.JSONDecodeError, OSError) as exc:
             logger.warning("Could not load %s: %s", self.path, exc)
-            return dict(_EMPTY_STORE)
+            import copy
+            return copy.deepcopy(_EMPTY_STORE)
+
+    # Public alias — tests call store.load()
+    def load(self) -> dict:
+        return self._load()
 
     def _save(self, data: dict) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         raw = json.dumps(data, indent=2, ensure_ascii=False)
         if len(raw.encode()) > WARN_THRESHOLD:
             logger.warning(
-                "Thread store approaching file size limit (%d KB) — "
-                "consider DynamoDB mode for large datasets",
+                "Thread store approaching file size limit (%d KB)",
                 len(raw.encode()) // 1024,
             )
         tmp = self.path.with_suffix(".tmp")
@@ -87,7 +91,7 @@ class JsonStore:
     def _require(self, data: dict, thread_id: str) -> dict:
         t = self._find(data, thread_id)
         if t is None:
-            raise ToolError(f"Thread not found: {thread_id}")
+            raise KeyError(f"Thread not found: {thread_id}")
         return t
 
     # ── Thread CRUD (high-level API used by JsonStore tests) ───────────
@@ -96,7 +100,7 @@ class JsonStore:
         data = self._load()
         now = _now_iso()
         thread: dict = {
-            "id": uuid.uuid4().hex,
+            "id": f"thread_{uuid.uuid4().hex}",
             "name": name, "status": "active",
             "created_at": now, "updated_at": now,
             "messages": [], "summary": None,

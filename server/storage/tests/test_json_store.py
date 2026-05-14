@@ -35,7 +35,7 @@ def test_file_created_on_first_new_thread(tmp_path):
 
     assert store.path.exists()
     assert thread["name"] == "my first thread"
-    assert len(thread["id"]) == 32  # uuid4().hex — 32-char hex
+    assert thread["id"].startswith("thread_")
     assert thread["status"] == "active"
     assert thread["messages"] == []
     assert thread["summary"] is None
@@ -67,7 +67,7 @@ def test_atomic_write_no_tmp_file_left_on_success(tmp_path):
 
 def test_load_returns_empty_store_when_file_absent(tmp_path):
     store = make_store(tmp_path)
-    data = store._load()
+    data = store.load()
     assert data["version"] == STORE_VERSION
     assert data["threads"] == []
 
@@ -123,7 +123,7 @@ def test_update_thread_persists_fields(tmp_path):
 
 def test_update_thread_raises_for_missing_id(tmp_path):
     store = make_store(tmp_path)
-    with pytest.raises((KeyError, Exception)):  # JsonStore raises ToolError
+    with pytest.raises(KeyError):
         store.update_thread("thread_nonexistent", name="x")
 
 
