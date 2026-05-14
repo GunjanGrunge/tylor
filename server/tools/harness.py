@@ -253,9 +253,15 @@ async def run_with_agents(
                 new_session_id = sid
 
             # Stream text content from AssistantMessage
+            # content is List[TextBlock | ToolUseBlock | ...] or str
             content = getattr(msg, "content", None) or getattr(msg, "text", None)
             if isinstance(content, str) and content:
                 yield content
+            elif isinstance(content, list):
+                for block in content:
+                    text = getattr(block, "text", None)
+                    if isinstance(text, str) and text:
+                        yield text
 
     except Exception as exc:
         yield f"\n⚠️  Error: {exc}"
