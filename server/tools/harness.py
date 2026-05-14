@@ -83,12 +83,37 @@ def _get_bmad_path() -> str | None:
     return None
 
 
+def _get_all_threads() -> list[dict]:
+    """Get all existing threads so Claude knows what's already open."""
+    try:
+        from server.tools.tylor import _get_db
+        db = _get_db()
+        threads = db.list_threads()
+        return [{"name": t.get("Name", t.get("name", "")),
+                 "status": t.get("Status", t.get("status", "")),
+                 "id": t.get("thread_id", t.get("id", ""))}
+                for t in threads if t.get("Name") or t.get("name")]
+    except Exception:
+        return []
+
+
 def build_supervisor_prompt(thread_name: str, cwd: str | None, bmad_path: str | None) -> str:
     context_lines = []
     if thread_name:
         context_lines.append(f"Active thread: {thread_name}")
     if cwd:
         context_lines.append(f"Project: {cwd}")
+
+    # Show all open threads so Claude can reference and suggest new ones
+    all_threads = _get_all_threads()
+    if all_threads:
+        thread_list = ", ".join(
+            f"{t['name']} ({t['status']})" for t in all_threads
+            if t['name'] != thread_name
+        )
+        if thread_list:
+            context_lines.append(f"Other open threads: {thread_list}")
+
     if bmad_path:
         context_lines.append(
             f"BMAD methodology available at {bmad_path} — use for structured PRDs, "
@@ -130,6 +155,12 @@ Then ask for the decision.
 
 **Thread memory is your context.**
 Reference prior decisions naturally. Never re-ask what's already been answered.
+
+**Cross-thread awareness.**
+You can see all open threads. When a conversation spawns work that belongs in a
+different thread (e.g. frontend design decisions during a PRD discussion), suggest it:
+"This is growing into frontend territory — you may want a Frontend thread for this later."
+Never switch threads yourself — just suggest. The user decides.
 
 **Token efficiency.**
 Use the minimum context needed. Don't repeat information already in the thread.
