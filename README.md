@@ -7,6 +7,7 @@
   [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
   [![Platform: Windows | macOS | Linux | WSL](https://img.shields.io/badge/Platform-Cross--Platform-success)](#)
   [![Claude Code](https://img.shields.io/badge/Integration-Claude_Code-orange)](#)
+  [![GitHub Copilot](https://img.shields.io/badge/Integration-GitHub_Copilot-blue)](#)
 </div>
 
 ---
@@ -49,7 +50,7 @@ Monitor your entire workspace through a beautiful, locally hosted web UI. Track 
 
 ## 🚀 Installation
 
-Tylor installs seamlessly into your Claude Code, Claude Desktop, or VSCode Claude extension environment. Requires Python 3.8+.
+Tylor installs seamlessly into your Claude Code, Claude Desktop, GitHub Copilot, or VSCode Claude extension environment. Requires Python 3.8+.
 
 ### Step 1: Clone the Repository
 
@@ -79,8 +80,8 @@ python %USERPROFILE%\.claude\plugins\GunjanGrunge\tylor\install.py
 
 ### Step 3: Verify
 
-1. Restart your Claude client completely (close the terminal/app and reopen it).
-2. Type `/help-agent101` in your Claude prompt.
+1. Restart your Claude or GitHub Copilot client completely (close the terminal/app and reopen it).
+2. Type `/help-agent101` in your prompt (or use Copilot Chat / `/mcp show`).
 3. If you see the capability index, Tylor is fully operational!
 
 ---

@@ -8,6 +8,7 @@ Clients patched:
   3. Claude Desktop Mac     → ~/Library/Application Support/Claude/claude_desktop_config.json
   4. Claude Desktop Windows → %APPDATA%/Claude/claude_desktop_config.json
   5. Claude Desktop Linux   → ~/.config/Claude/claude_desktop_config.json
+  6. GitHub Copilot CLI     → ~/.copilot/mcp.json
 
 Usage:
   python3 install.py            # default: project JSON storage
@@ -92,6 +93,10 @@ def claude_desktop_configs() -> list[Path]:
             except Exception:
                 pass
     return [p for p in candidates if p.parent.exists() or p.exists()]
+
+def github_copilot_configs() -> list[Path]:
+    """GitHub Copilot CLI config file locations."""
+    return [Path.home() / ".copilot" / "mcp.json"]
 
 
 # ── Python / venv setup ───────────────────────────────────────────────────────
@@ -346,6 +351,15 @@ def main() -> None:
         warn("Claude Desktop config not found — skipping (install Claude Desktop first if needed)")
     for cfg_path in desktop_configs:
         # Desktop config may not exist yet — create it
+        if patch_config(cfg_path, python_path, is_desktop=True):
+            ok(f"Patched {cfg_path}")
+        else:
+            fail(f"Failed to patch {cfg_path}")
+
+    # Step 5: Patch GitHub Copilot
+    header("Patching GitHub Copilot CLI")
+    copilot_configs = github_copilot_configs()
+    for cfg_path in copilot_configs:
         if patch_config(cfg_path, python_path, is_desktop=True):
             ok(f"Patched {cfg_path}")
         else:
