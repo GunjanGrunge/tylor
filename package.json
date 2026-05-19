@@ -1,0 +1,24 @@
+{
+  "name": "tylor",
+  "version": "1.0.0",
+  "description": "Give Claude Code persistent memory, laser-focused context, and an autonomous team of specialists.",
+  "main": "server/main.py",
+  "bin": {
+    "tylor": "bin/tylor.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GunjanGrunge/tylor.git"
+  },
+  "keywords": [
+    "claude",
+    "mcp",
+    "agents",
+    "threads",
+    "ai",
+    "tylor",
+    "github-copilot"
+  ],
+  "author": "Gunjan Grunge",
+  "license": "MIT"
+}

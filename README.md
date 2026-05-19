@@ -56,29 +56,25 @@ Monitor your entire workspace through a beautiful, locally hosted web UI. Track 
 
 Tylor installs seamlessly into your Claude Code, Claude Desktop, GitHub Copilot, Antigravity, or VSCode Claude extension environment. Requires Python 3.8+.
 
-### Step 1: Clone the Repository
+### ⚡ Option 1: The One-Line Installer (Recommended)
+
+If you have Node.js installed, you can configure Tylor instantly across all your clients without manually cloning the repository. Simply run:
+
+```bash
+npx tylor
+```
+
+### 💻 Option 2: Manual Git Clone
 
 **macOS / Linux / WSL:**
 ```bash
 git clone https://github.com/GunjanGrunge/tylor ~/.claude/plugins/GunjanGrunge/tylor
-```
-
-**Windows:**
-```powershell
-git clone https://github.com/GunjanGrunge/tylor %USERPROFILE%\.claude\plugins\GunjanGrunge\tylor
-```
-
-### Step 2: Run the Installer
-
-The installer automatically patches your Claude settings, sets up the Python environment, and configures the MCP server.
-
-**macOS / Linux / WSL:**
-```bash
 python3 ~/.claude/plugins/GunjanGrunge/tylor/install.py
 ```
 
 **Windows:**
 ```powershell
+git clone https://github.com/GunjanGrunge/tylor %USERPROFILE%\.claude\plugins\GunjanGrunge\tylor
 python %USERPROFILE%\.claude\plugins\GunjanGrunge\tylor\install.py
 ```
 
