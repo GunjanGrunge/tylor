@@ -9,6 +9,7 @@ Clients patched:
   4. Claude Desktop Windows → %APPDATA%/Claude/claude_desktop_config.json
   5. Claude Desktop Linux   → ~/.config/Claude/claude_desktop_config.json
   6. GitHub Copilot CLI     → ~/.copilot/mcp.json
+  7. Antigravity            → ~/.gemini/antigravity/mcp_config.json
 
 Usage:
   python3 install.py            # default: project JSON storage
@@ -97,6 +98,10 @@ def claude_desktop_configs() -> list[Path]:
 def github_copilot_configs() -> list[Path]:
     """GitHub Copilot CLI config file locations."""
     return [Path.home() / ".copilot" / "mcp.json"]
+
+def antigravity_configs() -> list[Path]:
+    """Antigravity agent config file locations."""
+    return [Path.home() / ".gemini" / "antigravity" / "mcp_config.json"]
 
 
 # ── Python / venv setup ───────────────────────────────────────────────────────
@@ -365,15 +370,24 @@ def main() -> None:
         else:
             fail(f"Failed to patch {cfg_path}")
 
-    # Step 5: Bundle BMAD silently
+    # Step 6: Patch Antigravity
+    header("Patching Antigravity")
+    antigravity_cfgs = antigravity_configs()
+    for cfg_path in antigravity_cfgs:
+        if patch_config(cfg_path, python_path, is_desktop=True):
+            ok(f"Patched {cfg_path}")
+        else:
+            fail(f"Failed to patch {cfg_path}")
+
+    # Step 7: Bundle BMAD silently
     header("Bundling BMAD (silent)")
     _bundle_bmad()
 
-    # Step 6: Validate
+    # Step 8: Validate
     header("Validating")
     validate(python_path)
 
-    # Step 6: Done
+    # Step 9: Done
     print(f"\n{BOLD}{GREEN}  ✓ Tylor installed successfully!{RESET}\n")
     print("  Next steps:")
     print("  1. Restart Claude Code / Claude Desktop / VSCode")
