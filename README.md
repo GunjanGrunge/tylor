@@ -41,6 +41,9 @@ Work in parallel without context bleed. Discuss frontend components in a `Fronte
 ### 🤖 Intelligent Orchestration 
 You don't need to micromanage. Claude acts as the orchestrator. If you ask it to review architecture, it will dynamically load its `cto` persona. If you ask it to write a PRD, it natively invokes the `bmad` skill framework to get the job done. 
 
+### 🔌 Infinite Extensibility (Lazy-Loading)
+Tylor is built on a production-hardened ADK-pattern harness. You can register hundreds of domain-specific ECC skills (like `ecc/web`, `ecc/data`) via the `/add-skill` command. Tylor **lazy-loads** only the tools required for the current prompt, giving you massive capability scaling without ever blowing up Claude's token context window.
+
 ### 🏗️ Autonomous AFK Sandboxing
 Declare a sandbox for your thread and let Claude work autonomously. Assign large, complex tasks and let Claude execute them while you step away from the keyboard.
 
