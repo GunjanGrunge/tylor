@@ -61,7 +61,7 @@ Tylor installs seamlessly into your Claude Code, Claude Desktop, GitHub Copilot,
 If you have Node.js installed, you can configure Tylor instantly across all your clients without manually cloning the repository. Simply run:
 
 ```bash
-npx tylor
+npx tylor-mcp
 ```
 
 ### 💻 Option 2: Manual Git Clone

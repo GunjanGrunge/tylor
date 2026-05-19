@@ -1,10 +1,10 @@
 {
-  "name": "tylor",
+  "name": "tylor-mcp",
   "version": "1.0.0",
   "description": "Give Claude Code persistent memory, laser-focused context, and an autonomous team of specialists.",
   "main": "server/main.py",
   "bin": {
-    "tylor": "bin/tylor.js"
+    "tylor-mcp": "bin/tylor.js"
   },
   "repository": {
     "type": "git",
