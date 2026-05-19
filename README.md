@@ -1,5 +1,6 @@
 <div align="center">
-  <h1>👔 Tylor</h1>
+  <img src="assets/tylor_logo.png" alt="Tylor Logo" width="150">
+  <h1>Tylor</h1>
   <p><strong>The Tailor to Your Threads</strong></p>
   <p><em>Give Claude Code persistent memory, laser-focused context, and an autonomous team of specialists.</em></p>
   
@@ -21,8 +22,8 @@ Every time you open Claude Code, you normally start from zero. Tylor fixes that.
 ## 🎨 How It Works
 
 <div align="center">
-  <img src="assets/tylor_infographic.png" alt="Tylor Architecture Infographic" width="800">
-  <p><em>Tylor orchestrates tools, persistent memory threads, and specialist sub-agents dynamically.</em></p>
+  <img src="assets/tylor_threads_concept.png" alt="Tylor Threads Architecture" width="800">
+  <p><em>Tylor weaves parallel, persistent memory threads and orchestrates specialist sub-agents.</em></p>
 </div>
 
 ---
