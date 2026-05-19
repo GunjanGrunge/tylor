@@ -1,244 +1,135 @@
-# Tylor — the tailor to your threads
+<div align="center">
+  <h1>👔 Tylor</h1>
+  <p><strong>The Tailor to Your Threads</strong></p>
+  <p><em>Give Claude Code persistent memory, laser-focused context, and an autonomous team of specialists.</em></p>
+  
+  [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+  [![Platform: Windows | macOS | Linux | WSL](https://img.shields.io/badge/Platform-Cross--Platform-success)](#)
+  [![Claude Code](https://img.shields.io/badge/Integration-Claude_Code-orange)](#)
+</div>
 
-> Claude Code plugin that gives Claude persistent memory, focused context, and a team of specialists — so every session picks up exactly where you left off.
+---
+
+Tylor transforms your Claude Code experience from a single-shot terminal interaction into a **persistent, intelligent workspace**. 
+
+Every time you open Claude Code, you normally start from zero. Tylor fixes that. It organizes your work into **threads**—isolated, named workspaces that survive restarts and reboots. It remembers every decision, every line of code, and every discussion, so you never have to repeat yourself.
 
 **No database. No cloud account. No configuration. Just install and go.**
 
 ---
 
-## What it does
+## ✨ Features
 
-Every time you open Claude Code, you start from zero. Tylor fixes that.
+### 🧠 Persistent Memory
+Tylor completely eliminates the "context reset." Shut down your computer, close your terminal, and come back a week later—Claude will pick up exactly where you left off. 
 
-You work in **threads** — named, persistent workspaces that survive restarts and reboots. Each thread remembers everything: what was built, what was decided, what was discussed. You never re-explain yourself.
+### 🗂️ Context Isolation (Threads)
+Work in parallel without context bleed. Discuss frontend components in a `Frontend` thread and database schemas in a `Backend` thread. By isolating context, token usage stays low, and Claude's focus stays incredibly sharp.
 
-When you work inside a thread, Tylor quietly brings in the right help. Discussing a product idea? The right thinking mode activates and structures the work. Writing code? The codebase gets read first, then acted on. Need a privacy policy? Two questions get asked, then a complete policy gets written — no hallucination, no guessing.
+### 🤖 Intelligent Orchestration 
+You don't need to micromanage. Claude acts as the orchestrator. If you ask it to review architecture, it will dynamically load its `cto` persona. If you ask it to write a PRD, it natively invokes the `bmad` skill framework to get the job done. 
 
-Multiple threads run in parallel. Switch between them instantly. See them all live in the visual dashboard.
+### 🏗️ Autonomous AFK Sandboxing
+Declare a sandbox for your thread and let Claude work autonomously. Assign large, complex tasks and let Claude execute them while you step away from the keyboard.
+
+### 📊 Visual Dashboard
+Monitor your entire workspace through a beautiful, locally hosted web UI. Track active threads, review past conversations, and watch autonomous agent progress in real-time.
 
 ---
 
-## Installation
+## 🚀 Installation
 
-**Requirements:** Python 3.8+ · Claude Code, Claude Desktop, or VSCode with Claude extension
+Tylor installs seamlessly into your Claude Code, Claude Desktop, or VSCode Claude extension environment. Requires Python 3.8+.
 
-Works on **macOS, Windows, Linux, and WSL**.
+### Step 1: Clone the Repository
 
-### Step 1 — Clone
-
+**macOS / Linux / WSL:**
 ```bash
 git clone https://github.com/GunjanGrunge/tylor ~/.claude/plugins/GunjanGrunge/tylor
 ```
 
 **Windows:**
-```
+```powershell
 git clone https://github.com/GunjanGrunge/tylor %USERPROFILE%\.claude\plugins\GunjanGrunge\tylor
 ```
 
-### Step 2 — Install
+### Step 2: Run the Installer
 
+The installer automatically patches your Claude settings, sets up the Python environment, and configures the MCP server.
+
+**macOS / Linux / WSL:**
 ```bash
 python3 ~/.claude/plugins/GunjanGrunge/tylor/install.py
 ```
 
 **Windows:**
-```
+```powershell
 python %USERPROFILE%\.claude\plugins\GunjanGrunge\tylor\install.py
 ```
 
-The installer sets up everything automatically — no AWS account, no API keys, no manual configuration needed.
+### Step 3: Verify
 
-### Step 3 — Restart your Claude client
-
-Quit and reopen Claude Code, Claude Desktop, or VSCode.
-
-### Step 4 — Verify
-
-```
-/help-agent101
-```
-
-If you see the command listing, Tylor is running.
+1. Restart your Claude client completely (close the terminal/app and reopen it).
+2. Type `/help-agent101` in your Claude prompt.
+3. If you see the capability index, Tylor is fully operational!
 
 ---
 
-## Quick start
+## 🕹️ Quick Start
 
-```
-CT My First Project          ← create your first thread
+Creating your first persistent workflow is incredibly simple:
 
-/run what is in this codebase?   ← Claude reads and summarises
+```text
+/new-thread Authentication   ← Create a persistent workspace
+/run we need to implement JWT based authentication
 
-CT Backend                   ← create a backend thread
-/run fix the authentication bug
+/new-thread Dashboard UI     ← Create an isolated UI thread
+/run build a react dashboard with a sidebar
 
-CT Frontend                  ← separate frontend thread
-/run the signup form needs improvement
+/switch-thread Authentication ← Instantly switch context back to Auth
+/run add refresh token logic
 
-SwThread Backend             ← switch back, full context intact
-/run add JWT refresh tokens
-
-/list-threads                ← see all threads
-/open-threads-ui             ← open the visual dashboard
+/list-threads                ← View your workspace status
+/open-threads-ui             ← Launch the visual dashboard
 ```
 
 ---
 
-## Commands
+## 🛠️ Command Reference
 
-### Thread management
+Tylor exposes a suite of powerful commands directly within Claude:
 
-| Command | What it does |
+| Command | Description |
 |---|---|
-| `CT [name]` | Create a new named thread |
-| `/new-thread [name]` | Same as CT |
-| `SwThread [name]` | Switch to a thread — fuzzy matching works, exact name not required |
-| `/switch-thread [name]` | Same as SwThread |
-| `/list-threads` | Show all threads with status |
-| `KillThread [name]` | Archive a thread with an AI-generated summary |
-| `/kill-thread [name]` | Same as KillThread |
-| `/recall [query]` | Search memory within the active thread |
+| `/new-thread <name>` | Create a named thread and seamlessly switch future work into it. |
+| `/switch-thread <name>` | Switch context to an existing thread (fuzzy matching supported). |
+| `/list-threads` | Show all available threads alongside their status and activity. |
+| `/kill-thread <name>` | Close a thread and dispatch asynchronous summarization. |
+| `/recall` | Search through the deep semantic memory of your active thread. |
+| `/add-skill` | Install a new skill package dynamically. |
+| `/open-threads-ui` | Open the live, local thread visualizer UI in your browser. |
+| `/set-sandbox <path>` | Declare specific filesystem roots for secure, autonomous execution. |
+| `/afk-status` | Get real-time progress reports on current autonomous background tasks. |
 
-### Running tasks
-
-| Command | What it does |
-|---|---|
-| `/run [task]` | Run any task — Claude handles the rest |
-| `/list-available-roles` | Show what specialist modes are available |
-
-### Autonomous execution
-
-| Command | What it does |
-|---|---|
-| `/set-sandbox [path]` | Declare the folder Claude can work in autonomously |
-| `/afk-status` | Check what autonomous tasks are running |
-
-### Visualizer
-
-| Command | What it does |
-|---|---|
-| `/open-threads-ui` | Open live dashboard at localhost:8765 |
+> **Pro Tip:** You can also use shorthand aliases like `CT <name>` to create a thread or `SwThread <name>` to switch.
 
 ---
 
-## How threads work
+## 🎭 Sub-Agents & Personas
 
-A thread is a persistent, named workspace. Everything you discuss in a thread stays there — decisions, code written, files read, questions answered.
+Tylor comes pre-equipped with specialist sub-agents. Claude will **automatically invoke** these personas based on the nature of your query—no manual intervention required.
 
-When you switch threads, you switch context. The backend thread doesn't know what the frontend thread discussed. This keeps focus sharp and token usage low.
-
-When you come back to a thread tomorrow, Claude has full memory of it. No re-priming. No "as I mentioned before." Just work.
-
-**Thread status:**
-- `active` — currently in use
-- `idle` — paused, full memory preserved
-- `killed` — archived with an AI-generated summary
+* **`cto`**: System architecture, tradeoffs, platform strategy, and engineering standards.
+* **`code_agent`**: Senior software engineer laser-focused on shipping robust code and tests.
+* **`analyst`**: Market research, data synthesis, and technical decision support.
+* **`ceo`**: Product strategy, roadmap prioritization, and stakeholder framing.
 
 ---
 
-## Running tasks with `/run`
+## 📄 License
 
-`/run` is the main way to delegate work to Claude. You describe what you need, and Claude figures out the best approach.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-```
-/run check if the frontend is polished
-/run design a cricket coaching app — ask me what you need
-/run add a privacy policy to the signup flow
-/run we need real-time collaboration — what are my options?
-/run create a PRD for the new onboarding flow
-/run review this code for security issues
-```
-
-Claude doesn't guess. When it needs information to do the job right, it asks one focused question at a time:
-
-```
-❓ What data does your app collect?
-❓ Which jurisdictions apply — GDPR, CCPA, or both?
-```
-
-You answer, it acts.
-
----
-
-## Working with multiple threads
-
-Tylor is designed for parallel work across multiple threads:
-
-```
-CT Backend API
-CT Frontend UI
-CT Product Planning
-CT Legal Review
-
-SwThread Backend     ← focus on backend
-/run implement the search endpoint
-
-SwThread Frontend    ← switch to frontend
-/run the search results page needs a loading state
-
-SwThread Legal       ← switch to legal
-/run draft a GDPR-compliant privacy policy
-
-/list-threads        ← see all four threads, all their context preserved
-```
-
----
-
-## Cross-thread awareness
-
-Claude sees all your open threads. When a conversation starts going somewhere that deserves its own space, it suggests it:
-
-```
-"This is growing into frontend territory — 
- you might want a Frontend thread for this work."
-```
-
-You decide. Claude never switches threads for you.
-
----
-
-## Visual dashboard
-
-```
-/open-threads-ui
-```
-
-Opens `http://localhost:8765` — a live visual dashboard showing all your threads. See what's active, what's idle, what's archived. Click any thread to read its full conversation history and summary.
-
----
-
-## Storage
-
-Everything is stored locally at `~/.tylor/threads.json`.
-
-No database. No cloud. No AWS. A year of heavy daily use fits under 10 MB.
-
----
-
-## Troubleshooting
-
-**`/help-agent101` not found after restart**
-1. Re-run: `python3 ~/.claude/plugins/GunjanGrunge/tylor/install.py`
-2. Restart your Claude client completely
-
-**Python not found**
-Install Python 3.8+ from [python.org](https://python.org)
-
-**First session is slow**
-Normal — first run installs dependencies. Takes ~30 seconds once.
-
-**Port 8765 already in use**
-Tylor will automatically try ports 8766–8774. The dashboard link in `/open-threads-ui` will reflect the actual port.
-
-**Thread context feels stale**
-Use `/recall [topic]` to surface relevant prior decisions from the thread.
-
----
-
-## License
-
-MIT — see [LICENSE](LICENSE)
-
----
-
-*Named after the tailor who works with threads.*
+<div align="center">
+  <p><em>Tylor — Tailoring the future of AI development.</em></p>
+</div>

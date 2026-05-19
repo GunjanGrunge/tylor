@@ -164,28 +164,26 @@ def hooks_entries() -> dict:
         def win_hook(cmd: str) -> str:
             return f"{py} -c \"import sys; sys.path.insert(0,'{server_dir}'); from server.tools.hooks import main; sys.argv=['hooks','{cmd}']; main()\""
         return {
-            "SessionStart": [{"command": win_hook("session-start")}],
-            "Stop":         [{"command": win_hook("session-checkpoint")}],
+            "SessionStart": [{"type": "command", "command": win_hook("session-start")}],
+            "Stop":         [{"type": "command", "command": win_hook("session-checkpoint")}],
             "PostToolUse":  [
                 {"matcher": "kill_thread",
-                 "command": win_hook("kill-thread-trigger")},
-                *[{"matcher": m,
-                   "command": win_hook("post-tool-use-code-index")}
-                  for m in ("Read", "Write", "Edit", "MultiEdit")],
+                 "hooks": [{"type": "command", "command": win_hook("kill-thread-trigger")}]},
+                {"matcher": "Read|Write|Edit|MultiEdit",
+                 "hooks": [{"type": "command", "command": win_hook("post-tool-use-code-index")}]}
             ],
         }
     else:
         def sh(name: str) -> str:
             return (hooks_dir / name).as_posix()
         return {
-            "SessionStart": [{"command": sh("session-start.sh")}],
-            "Stop":         [{"command": sh("session-checkpoint.sh")}],
+            "SessionStart": [{"type": "command", "command": sh("session-start.sh")}],
+            "Stop":         [{"type": "command", "command": sh("session-checkpoint.sh")}],
             "PostToolUse":  [
                 {"matcher": "kill_thread",
-                 "command": sh("kill-thread-trigger.sh")},
-                *[{"matcher": m,
-                   "command": sh("post-tool-use-code-index.sh")}
-                  for m in ("Read", "Write", "Edit", "MultiEdit")],
+                 "hooks": [{"type": "command", "command": sh("kill-thread-trigger.sh")}]},
+                {"matcher": "Read|Write|Edit|MultiEdit",
+                 "hooks": [{"type": "command", "command": sh("post-tool-use-code-index.sh")}]}
             ],
         }
 
