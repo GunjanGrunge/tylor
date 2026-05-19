@@ -18,6 +18,44 @@ Every time you open Claude Code, you normally start from zero. Tylor fixes that.
 
 ---
 
+## 🎨 How It Works
+
+```mermaid
+flowchart LR
+    User([👤 You]) -->|Talks naturally| Claude[Claude Code]
+    Claude -->|Delegates to| Tylor((👔 Tylor MCP))
+    
+    subgraph Threads [Persistent Workspaces]
+        direction TB
+        Auth[🔒 Auth Thread]
+        UI[🖥️ UI Thread]
+        Data[📊 Data Thread]
+    end
+    
+    Tylor -->|Routes context to| Threads
+    
+    subgraph Agents [Specialist Personas]
+        direction TB
+        CTO[🛠️ CTO]
+        Code[💻 Code Agent]
+        Analyst[📈 Analyst]
+    end
+    
+    Threads -.->|Auto-invokes| Agents
+    
+    style User fill:#2d3436,stroke:#b2bec3,stroke-width:2px,color:#fff
+    style Claude fill:#6c5ce7,stroke:#a29bfe,stroke-width:2px,color:#fff
+    style Tylor fill:#00b894,stroke:#55efc4,stroke-width:3px,color:#fff
+    style Auth fill:#0984e3,color:#fff,stroke:none
+    style UI fill:#0984e3,color:#fff,stroke:none
+    style Data fill:#0984e3,color:#fff,stroke:none
+    style CTO fill:#fdcb6e,color:#2d3436,stroke:none
+    style Code fill:#fdcb6e,color:#2d3436,stroke:none
+    style Analyst fill:#fdcb6e,color:#2d3436,stroke:none
+```
+
+---
+
 ## ✨ Features
 
 ### 🧠 Persistent Memory
