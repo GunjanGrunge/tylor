@@ -3,6 +3,7 @@
 *.env
 server/.env
 .env.local
+.npmrc.publish
 .aws/
 credentials
 *.pem
