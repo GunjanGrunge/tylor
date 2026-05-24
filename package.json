@@ -1,6 +1,6 @@
 {
   "name": "tylor-mcp",
-  "version": "1.0.0",
+  "version": "1.1.1",
   "description": "Give Claude Code persistent memory, laser-focused context, and an autonomous team of specialists.",
   "main": "server/main.py",
   "bin": {
@@ -20,5 +20,8 @@
     "github-copilot"
   ],
   "author": "Gunjan Grunge",
-  "license": "MIT"
+  "license": "MIT",
+  "scripts": {
+    "dev:sync": "node scripts/dev-sync.js"
+  }
 }

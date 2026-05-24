@@ -1,6 +1,7 @@
 """Tests for Story 3.5 — spawn_agent wired to Agent SDK harness."""
 from __future__ import annotations
 
+import json
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -223,3 +224,72 @@ def test_detect_thread_team_previews_roles_and_ecc_skill():
     assert "reviewer" in result["roles"]
     assert "planner" in result["roles"]
     assert {"tool_group": "ecc/diagrams", "action": "suggest"} in result["ecc_groups"]
+
+
+def test_save_session_id_is_cross_platform(tmp_path, monkeypatch):
+    from server.tools import harness as harness_mod
+
+    session_file = tmp_path / "sessions.json"
+    monkeypatch.setattr(harness_mod, "_sessions_file", lambda: session_file)
+
+    harness_mod._save_session_id("thread-a", "session-a")
+    harness_mod._save_session_id("thread-b", "session-b")
+
+    assert json.loads(session_file.read_text(encoding="utf-8")) == {
+        "thread-a": "session-a",
+        "thread-b": "session-b",
+    }
+
+
+@pytest.mark.asyncio
+async def test_run_with_agents_reports_failed_summary_on_sdk_error():
+    mock_sdk = MagicMock()
+
+    async def fake_query(prompt, options):
+        raise RuntimeError("sdk exploded")
+        yield
+
+    mock_sdk.query = fake_query
+    mock_sdk.ClaudeAgentOptions = MagicMock(side_effect=lambda **kw: MagicMock(**kw))
+
+    with patch.dict(sys.modules, {"claude_agent_sdk": mock_sdk}):
+        from importlib import reload
+        import server.tools.harness as harness_mod
+        reload(harness_mod)
+
+        chunks = []
+        async for chunk in harness_mod.run_with_agents(
+            message="test",
+            thread_id=VALID_THREAD_ID,
+        ):
+            chunks.append(chunk)
+
+    output = "".join(chunks)
+    assert "sdk exploded" in output
+    assert "[supervisor] failed" in output
+
+
+def test_spawn_agent_marks_failed_when_output_persistence_fails():
+    fake_db = _make_fake_db()
+
+    async def fake_run(message, thread_id, thread_name="", cwd=None, system_prompt=None):
+        yield "result"
+
+    with patch.dict(sys.modules, {"claude_agent_sdk": MagicMock()}), \
+         patch("server.tools.agents._get_db", return_value=fake_db), \
+         patch("server.tools.agents.run_with_agents", side_effect=fake_run), \
+         patch("server.tools.agents.persist_agent_output", side_effect=RuntimeError("db down")):
+
+        from server.tools.agents import spawn_agent
+        result = spawn_agent(
+            persona="analyst",
+            thread_id=VALID_THREAD_ID,
+            task="crunch numbers",
+            wait_for_completion=True,
+        )
+
+    final_state = fake_db.put_agent_state.call_args_list[-1].kwargs["state"]
+    assert result["status"] == "failed"
+    assert result["output_sk"] is None
+    assert final_state["Status"] == "failed"
+    assert "db down" in final_state["Error"]

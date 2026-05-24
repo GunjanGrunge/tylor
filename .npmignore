@@ -1,0 +1,41 @@
+# Secrets and local configuration
+.env
+*.env
+server/.env
+.env.local
+.aws/
+credentials
+*.pem
+*.key
+
+# Local state and caches
+.git/
+.agent101/
+agent101_data/
+*.agent101
+tmp_pytest/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+node_modules/
+.npm-cache/
+*.log
+
+# Development-only artifacts
+server/**/tests/
+server/tests/
+server/storage/tests/
+htmlcov/
+.coverage
+ui/dist/
+ui/.vite/
+_bmad/
+_bmad-output/
+.agents/
+.claude/
+.vscode/
+.idea/
+*.swp
+*.DS_Store

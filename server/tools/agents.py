@@ -243,8 +243,21 @@ def _run_persona_agent(
             task=task,
         )
         output_sk = result.get("output_sk")
-    except Exception:
-        output_sk = None
+    except Exception as exc:
+        message = f"{persona} output persistence failed: {exc}"
+        _record_agent_event(db, thread_id, agent_id, persona, "error", message)
+        _write_agent_state(
+            db,
+            thread_id,
+            agent_id,
+            {
+                "Status": "failed",
+                "Persona": persona,
+                "Task": task,
+                "Error": str(exc),
+            },
+        )
+        return {"output_sk": None, "output": output, "error": str(exc)}
 
     # Update agent state to completed
     _write_agent_state(
@@ -332,6 +345,10 @@ def spawn_agent(persona: str, thread_id: str, task: str, wait_for_completion: bo
         )
         worker.start()
 
+    status = "running"
+    if wait_for_completion:
+        status = "failed" if execution.get("error") else "completed"
+
     return {
         "agent_id": agent_id,
         "persona": definition.name,
@@ -341,7 +358,7 @@ def spawn_agent(persona: str, thread_id: str, task: str, wait_for_completion: bo
         "task": task,
         "state_sk": state_item["SK"],
         "output_sk": execution.get("output_sk"),
-        "status": "completed" if wait_for_completion else "running",
+        "status": status,
         "streaming": not wait_for_completion,
         "skill_loads": persona_skill_loads,
         "task_skill": task_skill,

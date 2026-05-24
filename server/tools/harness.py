@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from pathlib import Path
 from typing import AsyncIterator
 
 from ._mcp import mcp
 from .registry import ECC_SKILLS, detect_registry_skill
+from .security import is_dep_file, scan_packages_async, should_prompt_on_push
 
 # ── 5 roles (lenses, not knowledge bases) ────────────────────────────────────
 
@@ -234,56 +236,42 @@ def _load_session_id(thread_id: str) -> str | None:
 
 
 def _save_session_id(thread_id: str, session_id: str) -> None:
-    import fcntl
     f = _sessions_file()
     f.parent.mkdir(parents=True, exist_ok=True)
     lock = f.with_suffix(".lock")
-    with lock.open("a") as lf:
-        fcntl.flock(lf, fcntl.LOCK_EX)
+    with lock.open("a+b") as lf:
+        if os.name == "nt":
+            import msvcrt
+
+            if lf.tell() == 0:
+                lf.write(b"\0")
+                lf.flush()
+            lf.seek(0)
+            msvcrt.locking(lf.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(lf, fcntl.LOCK_EX)
         try:
             data: dict = {}
             if f.exists():
                 try:
-                    data = json.loads(f.read_text())
+                    data = json.loads(f.read_text(encoding="utf-8"))
                 except Exception:
                     pass
             data[thread_id] = session_id
             tmp = f.with_suffix(".tmp")
-            tmp.write_text(json.dumps(data, indent=2))
+            tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
             tmp.replace(f)
         finally:
-            fcntl.flock(lf, fcntl.LOCK_UN)
+            if os.name == "nt":
+                lf.seek(0)
+                msvcrt.locking(lf.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(lf, fcntl.LOCK_UN)
 
 
 # ── Core harness ──────────────────────────────────────────────────────────────
-
-def _block_to_verbose_text(block) -> str | None:
-    text = getattr(block, "text", None)
-    if isinstance(text, str) and text:
-        return text
-
-    block_type = getattr(block, "type", None) or block.__class__.__name__
-    name = getattr(block, "name", None)
-    tool_input = getattr(block, "input", None)
-    content = getattr(block, "content", None)
-
-    if name:
-        suffix = ""
-        if tool_input:
-            try:
-                suffix = " " + json.dumps(tool_input, ensure_ascii=False)[:500]
-            except Exception:
-                suffix = f" {tool_input!s}"[:500]
-        return f"\n$ {name}{suffix}\n"
-
-    if content:
-        if isinstance(content, str):
-            return f"\n[{block_type}] {content}\n"
-        return f"\n[{block_type}] {content!s}\n"
-
-    if block_type and block_type not in {"TextBlock", "text"}:
-        return f"\n[{block_type}]\n"
-    return None
 
 async def run_with_agents(
     message: str,
@@ -291,6 +279,8 @@ async def run_with_agents(
     thread_name: str = "",
     cwd: str | None = None,
     system_prompt: str | None = None,
+    extra_tools: list[str] | None = None,
+    is_new_session: bool = False,
 ) -> AsyncIterator[str]:
     try:
         from claude_agent_sdk import query, ClaudeAgentOptions
@@ -305,42 +295,131 @@ async def run_with_agents(
 
     session_id = _load_session_id(thread_id)
 
+    base_tools = [
+        "Read", "Write", "Edit", "Bash", "Glob", "Grep",
+        "WebFetch", "WebSearch", "AskUserQuestion", "Agent",
+    ]
+    allowed_tools = base_tools + [t for t in (extra_tools or []) if t not in base_tools]
+
     options = ClaudeAgentOptions(
         system_prompt=system_prompt,
-        allowed_tools=[
-            "Read", "Write", "Edit", "Bash", "Glob", "Grep",
-            "WebFetch", "WebSearch", "AskUserQuestion", "Agent",
-        ],
+        allowed_tools=allowed_tools,
         agents=agent_registry,
         resume=session_id,
         cwd=cwd,
         max_turns=20,
     )
 
+    # Kick off session-start scan in background so it runs alongside the agent
+    start_scan_task: asyncio.Task | None = None
+    if is_new_session and cwd:
+        yield "[bumblebee] starting session-start package scan...\n"
+        start_scan_task = asyncio.create_task(scan_packages_async(cwd))
+
+    agent_count = 0
+    dep_scan_tasks: list[tuple[str, asyncio.Task]] = []
+    bash_commands_seen: list[str] = []
     new_session_id: str | None = None
+    query_error: Exception | None = None
+
     try:
         async for msg in query(prompt=message, options=options):
-            # Capture session ID from ResultMessage (end of run)
             sid = getattr(msg, "session_id", None)
             if sid:
                 new_session_id = sid
 
-            # Stream text and tool activity so the UI can mirror terminal-style
-            # verbose agent progress instead of only showing final answers.
             content = getattr(msg, "content", None) or getattr(msg, "text", None)
             if isinstance(content, str) and content:
                 yield content
             elif isinstance(content, list):
                 for block in content:
-                    verbose = _block_to_verbose_text(block)
-                    if verbose:
-                        yield verbose
+                    name = getattr(block, "name", None)
+                    input_ = getattr(block, "input", None) or {}
+
+                    # ── Display ──────────────────────────────────────────────
+                    text = getattr(block, "text", None)
+                    if isinstance(text, str) and text:
+                        yield text
+                    elif name == "Agent":
+                        agent_count += 1
+                        role = (
+                            input_.get("subagent_type")
+                            or input_.get("description", "agent")
+                        )
+                        task_hint = (
+                            input_.get("description") or input_.get("prompt", "")
+                        )[:80].replace("\n", " ")
+                        yield f"\n[agent: {role} #{agent_count}] starting — {task_hint}\n"
+                    elif name:
+                        yield f"\n$ {name}\n"
+
+                    # ── Security side-effects ─────────────────────────────────
+                    if name in ("Write", "Edit"):
+                        fp = input_.get("file_path", "")
+                        if fp and is_dep_file(fp):
+                            fname = Path(fp).name
+                            dep_scan_tasks.append((
+                                fname,
+                                asyncio.create_task(
+                                    scan_packages_async(cwd or str(Path(fp).parent))
+                                ),
+                            ))
+                            yield f"\n[bumblebee] 📦 {fname} modified — scanning dependencies...\n"
+                    elif name == "Bash":
+                        cmd = input_.get("command", "")
+                        if cmd:
+                            bash_commands_seen.append(cmd)
 
     except Exception as exc:
+        query_error = exc
         yield f"\n⚠️  Error: {exc}"
 
     if new_session_id:
         _save_session_id(thread_id, new_session_id)
+
+    # ── Collect session-start scan result ─────────────────────────────────────
+    if start_scan_task:
+        try:
+            findings = await asyncio.wait_for(start_scan_task, timeout=60)
+            if findings:
+                yield "\n[bumblebee] ⚠️  session-start scan findings:\n"
+                for f in findings:
+                    yield f"  • {f}\n"
+            else:
+                yield "\n[bumblebee] ✅ session-start scan — no vulnerabilities found\n"
+        except asyncio.TimeoutError:
+            yield "\n[bumblebee] ⚠️  session-start scan timed out\n"
+        except Exception as exc:
+            yield f"\n[bumblebee] scan error: {exc}\n"
+
+    # ── Collect dep-file scan results ─────────────────────────────────────────
+    for fname, task in dep_scan_tasks:
+        try:
+            findings = await asyncio.wait_for(task, timeout=30)
+            if findings:
+                yield f"\n[bumblebee] ⚠️  {fname} scan findings:\n"
+                for f in findings:
+                    yield f"  • {f}\n"
+            else:
+                yield f"\n[bumblebee] ✅ {fname} scan — clean\n"
+        except asyncio.TimeoutError:
+            yield f"\n[bumblebee] ⚠️  {fname} scan timed out\n"
+        except Exception:
+            pass
+
+    # ── Push prompt ───────────────────────────────────────────────────────────
+    if any(should_prompt_on_push(cmd) for cmd in bash_commands_seen):
+        yield (
+            "\n[bumblebee] 🛡️  git push detected — want a security scan before others pull? "
+            "Ask me to run a security check or re-invoke with that request.\n"
+        )
+
+    # ── Completion summary ────────────────────────────────────────────────────
+    agent_label = f"{agent_count} agent{'s' if agent_count != 1 else ''}" if agent_count else "no sub-agents"
+    if query_error is not None:
+        yield f"\n[supervisor] failed — {agent_label} ran before error\n"
+    else:
+        yield f"\n[supervisor] complete — {agent_label} ran\n"
 
 
 # ── MCP tools ─────────────────────────────────────────────────────────────────
@@ -371,19 +450,42 @@ async def run_in_thread(thread_id: str, message: str, cwd: str | None = None) ->
     except Exception:
         pass
 
+    is_new_session = _load_session_id(thread_id) is None
+
     chunks: list[str] = []
+
+    # ── Intent classification log ─────────────────────────────────────────────
+    roles = _role_matches(message)
+    chunks.append(f"[agent101] intent classified: {', '.join(roles)}\n")
+
+    # ── Skill auto-detection and load ─────────────────────────────────────────
     auto_loaded = _auto_load_for_message(message)
+    extra_tools: list[str] = []
     if auto_loaded.get("matched"):
+        skill_name = auto_loaded.get("skill", "")
+        loaded = auto_loaded.get("loaded") or {}
+        extra_tools = list(loaded.get("tools", []))
         chunks.append(
-            "[agent101] auto-loaded skill "
-            f"{auto_loaded.get('skill')} ({auto_loaded.get('action')})\n"
+            f"[agent101] auto-loaded skill: {skill_name} "
+            f"({', '.join(extra_tools) if extra_tools else auto_loaded.get('action')})\n"
         )
+
+    ecc_matches = _matching_ecc_groups(message)
+    for match in ecc_matches:
+        group = match.get("tool_group", "")
+        if group and not any(t in extra_tools for t in (group,)):
+            chunks.append(f"[agent101] suggested skill: {group}\n")
+
     try:
-        async for chunk in run_with_agents(message, thread_id, thread_name, cwd):
+        async for chunk in run_with_agents(
+            message, thread_id, thread_name, cwd,
+            extra_tools=extra_tools,
+            is_new_session=is_new_session,
+        ):
             chunks.append(chunk)
     except asyncio.TimeoutError:
         chunks.append("\n⚠️  Harness timed out (240s). The agent may still be running.")
-    return "".join(chunks) or "(no output)"
+    return "Tylor:\n" + ("".join(chunks) or "(no output)")
 
 
 @mcp.tool()

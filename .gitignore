@@ -25,6 +25,7 @@ agent101_data/
 
 # Test / dev artifacts
 .pytest_cache/
+tmp_pytest/
 .coverage
 htmlcov/
 
@@ -40,6 +41,7 @@ _bmad-output/
 
 # Node (ui build output if added later)
 node_modules/
+.npm-cache/
 ui/dist/
 ui/.vite/
 

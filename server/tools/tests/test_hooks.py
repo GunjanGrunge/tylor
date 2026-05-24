@@ -7,6 +7,8 @@ import subprocess
 import sys
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 PLUGIN_DIR = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(PLUGIN_DIR))
 
@@ -113,6 +115,7 @@ def test_kill_thread_trigger_dispatches_background_process_without_waiting():
 
 
 def test_hook_shell_scripts_exist_and_are_executable():
+    """Verify .sh hooks exist and have git-tracked executable bit (cross-platform)."""
     for rel_path in (
         "hooks/session-start.sh",
         "hooks/session-checkpoint.sh",
@@ -120,5 +123,19 @@ def test_hook_shell_scripts_exist_and_are_executable():
         "hooks/post-tool-use-code-index.sh",
     ):
         path = PLUGIN_DIR / rel_path
-        assert path.exists()
-        assert path.stat().st_mode & 0o111
+        assert path.exists(), f"{rel_path} not found"
+
+        # Use git to check the tracked file mode — works on all OS.
+        # git mode 100755 = regular file, executable.
+        result = subprocess.run(
+            ["git", "ls-files", "--stage", rel_path],
+            cwd=str(PLUGIN_DIR),
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, f"git ls-files failed for {rel_path}"
+        mode = result.stdout.split()[0] if result.stdout.split() else ""
+        assert mode == "100755", (
+            f"{rel_path} is not marked executable in git (mode={mode!r}). "
+            f"Fix with: git update-index --chmod=+x {rel_path}"
+        )

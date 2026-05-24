@@ -13,7 +13,7 @@ from pathlib import Path
 from mcp.server.fastmcp.exceptions import ToolError
 
 from ._mcp import mcp
-from .security import run_bumblebee_security_gate
+from .security import run_bumblebee_security_gate, should_prompt_on_push
 
 
 NO_SANDBOX_MESSAGE = "No sandbox configured — run /set-sandbox <path> first"
@@ -272,17 +272,34 @@ def _validate_command_paths(
 
 
 def _terminate_process_group(process: subprocess.Popen) -> None:
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return
-    try:
-        process.wait(timeout=2)
-    except subprocess.TimeoutExpired:
+    """Terminate a process and its children — cross-platform."""
+    if os.name == "nt":
+        # Windows: no process groups — use taskkill to kill the tree
         try:
-            os.killpg(process.pid, signal.SIGKILL)
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                capture_output=True,
+                check=False,
+            )
+        except OSError:
+            pass
+        try:
+            process.kill()
+        except OSError:
+            pass
+    else:
+        # Unix: kill the entire process group (shell + children)
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
         except ProcessLookupError:
             return
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                return
 
 
 @mcp.tool()
@@ -362,6 +379,18 @@ def execute_in_sandbox(
             },
         )
 
+    if should_prompt_on_push(command):
+        return {
+            "status": "confirmation_required",
+            "command": command,
+            "message": (
+                "[bumblebee] 🛡️  git push detected. "
+                "Want a security scan before others pull? "
+                "Reply yes to scan first, or re-call execute_in_sandbox with "
+                "the original command to push without scanning."
+            ),
+        }
+
     start = time.monotonic()
     try:
         args = shlex.split(command)
@@ -403,10 +432,15 @@ def execute_in_sandbox(
             },
         )
         return result
-    except subprocess.TimeoutExpired as exc:
+    except subprocess.TimeoutExpired:
         _terminate_process_group(process)
-        stdout = exc.stdout or ""
-        stderr = exc.stderr or ""
+        # Drain the pipe after kill to capture any partial output.
+        # This is critical on Windows where exc.stdout may be empty
+        # because the pipe buffer wasn't read before the process was killed.
+        try:
+            stdout, stderr = process.communicate(timeout=5)
+        except (subprocess.TimeoutExpired, OSError):
+            stdout, stderr = "", ""
         if isinstance(stdout, bytes):
             stdout = stdout.decode("utf-8", errors="replace")
         if isinstance(stderr, bytes):
