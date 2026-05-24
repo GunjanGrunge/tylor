@@ -61,6 +61,7 @@ def test_help_index_lists_commands_tools_registry_personas_and_ecc(tmp_path):
         "/open-threads-ui",
         "/set-sandbox",
         "/afk-status",
+        "/run",
     }
     assert {tool["name"] for tool in result["tier1_tools"]} >= {
         "new_thread",
@@ -80,14 +81,17 @@ def test_help_index_lists_commands_tools_registry_personas_and_ecc(tmp_path):
         "execute_with_recovery",
         "start_afk",
         "afk_status",
-        "pause_afk",
-    }
-    assert result["registered_skills"] == [
-        {
-            "name": "bmad",
-            "trigger": "Use when user wants to create a PRD.",
+            "pause_afk",
+            "detect_thread_team",
+            "run_in_thread",
+            "list_available_roles",
         }
-    ]
+    skills_by_name = {skill["name"]: skill for skill in result["registered_skills"]}
+    assert skills_by_name["bmad"] == {
+        "name": "bmad",
+        "trigger": "Use when user wants to create a PRD.",
+    }
+    assert {"ecc/web", "ecc/data", "ecc/presentation", "ecc/diagrams", "ecc/pipeline"} <= set(skills_by_name)
     assert {persona["name"] for persona in result["personas"]} == {
         "analyst",
         "ceo",
@@ -133,12 +137,14 @@ def test_help_agent101_reads_registry_fresh_each_invocation(tmp_path):
         )
         second = help_mod.help_agent101()
 
-    assert first["registered_skills"] == [
-        {"name": "alpha", "trigger": "Use for alpha workflows."}
-    ]
-    assert second["registered_skills"] == [
-        {"name": "beta", "trigger": "Use for beta workflows."}
-    ]
+    first_by_name = {skill["name"]: skill for skill in first["registered_skills"]}
+    second_by_name = {skill["name"]: skill for skill in second["registered_skills"]}
+    assert first_by_name["alpha"] == {"name": "alpha", "trigger": "Use for alpha workflows."}
+    assert second_by_name["beta"] == {"name": "beta", "trigger": "Use for beta workflows."}
+    assert "beta" not in first_by_name
+    assert "alpha" not in second_by_name
+    assert {"ecc/web", "ecc/data", "ecc/presentation", "ecc/diagrams", "ecc/pipeline"} <= set(first_by_name)
+    assert {"ecc/web", "ecc/data", "ecc/presentation", "ecc/diagrams", "ecc/pipeline"} <= set(second_by_name)
 
 
 def test_help_agent101_registered_as_tier1_tool():

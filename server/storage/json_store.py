@@ -159,6 +159,10 @@ class JsonStore:
                         "updated_at": now,
                         **({"project": item["Project"]} if item.get("Project") else {}),
                     })
+                    if "sandbox_roots" in item:
+                        existing["sandbox_roots"] = list(item.get("sandbox_roots", []))
+                    if "afk_session" in item:
+                        existing["afk_session"] = item.get("afk_session")
                     if "Summary" in item:
                         existing["summary"] = item["Summary"]
                     self._save(data)
@@ -249,6 +253,8 @@ class JsonStore:
             "CreatedAt": t.get("created_at", ""),
             "UpdatedAt": t.get("updated_at", ""),
             "Project": t.get("project", ""),
+            "sandbox_roots": list(t.get("sandbox_roots", [])),
+            **({"afk_session": t["afk_session"]} if "afk_session" in t else {}),
         }]
         for msg in t.get("messages", []):
             items.append(msg)
@@ -276,6 +282,8 @@ class JsonStore:
             "MessageCount": len(t.get("messages", [])),
             "CreatedAt": t.get("created_at", ""),
             "UpdatedAt": t.get("updated_at", ""),
+            "sandbox_roots": list(t.get("sandbox_roots", [])),
+            **({"afk_session": t["afk_session"]} if "afk_session" in t else {}),
         }
 
     def get_current_thread_marker(self) -> dict | None:

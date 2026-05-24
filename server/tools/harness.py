@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import AsyncIterator
 
 from ._mcp import mcp
+from .registry import ECC_SKILLS, detect_registry_skill
 
 # ── 5 roles (lenses, not knowledge bases) ────────────────────────────────────
 
@@ -167,6 +168,37 @@ Never switch threads yourself — just suggest. The user decides.
 Use the minimum context needed. Don't repeat information already in the thread.
 Brief sub-agents with only what they need — not the entire conversation history.
 """
+
+
+def _role_matches(message: str) -> list[str]:
+    text = message.lower()
+    matches = []
+    if any(word in text for word in ("research", "compare", "source", "market", "find", "investigate")):
+        matches.append("researcher")
+    if any(word in text for word in ("build", "fix", "implement", "code", "test", "refactor", "debug")):
+        matches.append("implementer")
+    if any(word in text for word in ("review", "audit", "risk", "check", "validate", "security")):
+        matches.append("reviewer")
+    if any(word in text for word in ("plan", "roadmap", "architecture", "design", "breakdown")):
+        matches.append("planner")
+    if any(word in text for word in ("draft", "write", "prd", "doc", "policy", "spec", "report")):
+        matches.append("drafter")
+    return matches or ["implementer"]
+
+
+def _matching_ecc_groups(message: str) -> list[dict]:
+    tokens = set(message.lower().replace("/", " ").replace("-", " ").split())
+    matches = []
+    for group, metadata in ECC_SKILLS.items():
+        keywords = {str(keyword).lower() for keyword in metadata.get("keywords", [])}
+        if tokens.intersection(keywords):
+            matches.append({"tool_group": group, "action": "suggest"})
+    return matches
+
+
+def _auto_load_for_message(message: str) -> dict:
+    skill = detect_registry_skill(message, auto_load=True)
+    return skill
 
 
 def build_agent_registry() -> dict:
@@ -340,12 +372,45 @@ async def run_in_thread(thread_id: str, message: str, cwd: str | None = None) ->
         pass
 
     chunks: list[str] = []
+    auto_loaded = _auto_load_for_message(message)
+    if auto_loaded.get("matched"):
+        chunks.append(
+            "[agent101] auto-loaded skill "
+            f"{auto_loaded.get('skill')} ({auto_loaded.get('action')})\n"
+        )
     try:
         async for chunk in run_with_agents(message, thread_id, thread_name, cwd):
             chunks.append(chunk)
     except asyncio.TimeoutError:
         chunks.append("\n⚠️  Harness timed out (240s). The agent may still be running.")
     return "".join(chunks) or "(no output)"
+
+
+@mcp.tool()
+def detect_thread_team(thread_id: str, message: str) -> dict:
+    """
+    Preview which role lenses and skill groups agent101 will use for a thread task.
+
+    Args:
+        thread_id: Active thread ID.
+        message: User task text.
+    """
+    thread_name = ""
+    try:
+        from server.tools.tylor import _get_db
+        meta = _get_db().get_thread_meta(thread_id)
+        thread_name = (meta or {}).get("Name", "")
+    except Exception:
+        pass
+
+    skill = detect_registry_skill(message, auto_load=False)
+    return {
+        "thread_id": thread_id,
+        "thread_name": thread_name,
+        "roles": _role_matches(message),
+        "matched_skill": skill if skill.get("matched") else None,
+        "ecc_groups": _matching_ecc_groups(message),
+    }
 
 
 @mcp.tool()

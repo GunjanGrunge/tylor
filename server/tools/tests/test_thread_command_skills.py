@@ -14,6 +14,12 @@ COMMANDS = {
     "kill-thread": ["kill_thread", "Summarization in progress", "Killing", "recovery"],
     "list-threads": ["list_threads", "Active", "message_count", "recovery"],
     "recall": ["recall_memory", "query", "results", "recovery"],
+    "open-threads-ui": ["open_threads_ui", "Thread Visualizer", "dashboard", "recovery"],
+    "ecc-web": ["load_skill_tools", "ecc/web", "web_fetch", "web_scrape"],
+    "ecc-data": ["load_skill_tools", "ecc/data", "dataset_manager", "data_clean", "data_transform"],
+    "ecc-presentation": ["load_skill_tools", "ecc/presentation", "build_pptx", "build_doc"],
+    "ecc-diagrams": ["load_skill_tools", "ecc/diagrams", "diagram_gen", "flowchart_gen"],
+    "ecc-pipeline": ["load_skill_tools", "ecc/pipeline", "pipeline_builder", "pipeline_run"],
 }
 
 

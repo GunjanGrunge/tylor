@@ -340,6 +340,33 @@ async def test_api_thread_messages_before_param_accepted():
             assert resp.status == 200
 
 
+@pytest.mark.asyncio
+async def test_api_thread_agent_events_accepts_agent_ids_and_returns_verbose_chunks():
+    """GET /api/threads/{id}/agents/{agent_id}/events returns verbose chunks."""
+    from ..ui_server import _make_app
+    from aiohttp.test_utils import TestServer, TestClient
+
+    app = _make_app()
+    valid_id = "abc123def456abc123def456abc12345"
+    agent_id = "agent_abc123"
+    mock_events = [
+        {
+            "thread_id": valid_id,
+            "agent_id": agent_id,
+            "persona": "code_agent",
+            "event_type": "chunk",
+            "content": "$ pytest -q",
+            "timestamp": "2026-05-13T09:00:00Z",
+        },
+    ]
+    with patch(UI_SERVER_MODULE + "._fetch_agent_events", return_value=mock_events):
+        async with TestClient(TestServer(app)) as client:
+            resp = await client.get(f"/api/threads/{valid_id}/agents/{agent_id}/events")
+            assert resp.status == 200
+            data = await resp.json()
+            assert data["events"] == mock_events
+
+
 # ── Story 6.5: Live state sync tests ─────────────────────────────────────────
 
 @pytest.mark.asyncio

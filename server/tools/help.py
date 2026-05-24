@@ -43,6 +43,10 @@ SLASH_COMMANDS = [
         "command": "/afk-status",
         "description": "Report current AFK execution progress for the active thread.",
     },
+    {
+        "command": "/run",
+        "description": "Run a task in the active thread with automatic role and skill routing.",
+    },
 ]
 
 TIER1_TOOLS = [
@@ -125,6 +129,18 @@ TIER1_TOOLS = [
     {
         "name": "pause_afk",
         "description": "Request AFK execution to pause at the next checkpoint.",
+    },
+    {
+        "name": "detect_thread_team",
+        "description": "Preview which roles and ECC skill groups match a thread task.",
+    },
+    {
+        "name": "run_in_thread",
+        "description": "Run a task through the Agent SDK harness with automatic skill pickup.",
+    },
+    {
+        "name": "list_available_roles",
+        "description": "Show the role lenses available to the supervisor harness.",
     },
 ]
 

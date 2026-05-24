@@ -31,6 +31,7 @@ The slash-command section must include:
 - `/recall`
 - `/add-skill`
 - `/open-threads-ui`
+- `/run`
 
 ## Error Handling
 

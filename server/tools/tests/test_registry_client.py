@@ -41,19 +41,17 @@ def test_list_registry_returns_lightweight_skill_index(tmp_path):
     with patch.object(registry_mod, "REGISTRY_PATH", registry_path):
         result = registry_mod.list_registry()
 
-    assert result == {
-        "skills": [
-            {
-                "name": "bmad",
-                "trigger_description": "BMad story workflows",
-                "keywords": ["story", "review"],
-                "tool_count": 2,
-            }
-        ]
+    by_name = {skill["name"]: skill for skill in result["skills"]}
+    assert by_name["bmad"] == {
+        "name": "bmad",
+        "trigger_description": "BMad story workflows",
+        "keywords": ["story", "review"],
+        "tool_count": 2,
     }
-    assert "schemas" not in result["skills"][0]
-    assert "module" not in result["skills"][0]
-    assert "tools" not in result["skills"][0]
+    assert {"ecc/web", "ecc/data", "ecc/presentation", "ecc/diagrams", "ecc/pipeline"} <= set(by_name)
+    assert "schemas" not in by_name["bmad"]
+    assert "module" not in by_name["bmad"]
+    assert "tools" not in by_name["bmad"]
 
 
 def test_load_skill_tools_loads_registry_backed_group_without_restart(tmp_path):
@@ -85,6 +83,22 @@ def test_load_skill_tools_loads_registry_backed_group_without_restart(tmp_path):
     }
     tool_names = {tool.name for tool in __import__("asyncio").run(mcp.list_tools())}
     assert {"web_fetch", "web_scrape"} <= tool_names
+
+
+def test_builtin_ecc_skill_can_be_auto_loaded_without_registry_entry(tmp_path):
+    from server.tools import registry as registry_mod
+
+    registry_path = tmp_path / "registry.json"
+    _write_registry(registry_path, [])
+
+    with patch.object(registry_mod, "REGISTRY_PATH", registry_path):
+        result = registry_mod.detect_registry_skill("clean this csv dataset", auto_load=True)
+
+    assert result["matched"] is True
+    assert result["skill"] == "ecc/data"
+    assert result["action"] == "loaded"
+    assert result["loaded"]["tools"] == ["data_clean", "data_transform", "dataset_manager"]
+    assert result["thread_persistence"] is True
 
 
 def test_startup_manifest_is_tier1_only_and_lists_under_100ms():

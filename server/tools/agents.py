@@ -11,6 +11,7 @@ from mcp.types import ErrorData, INVALID_PARAMS
 from .personas import list_persona_summaries, load_persona
 from ._mcp import mcp
 from .harness import run_with_agents
+from .registry import detect_registry_skill, load_skill_tools
 
 _AGENT_ID_RE   = re.compile(r"^[a-zA-Z0-9_-]+$")
 _THREAD_ID_RE  = re.compile(r"^[a-f0-9]{32}$")  # uuid4().hex format
@@ -145,6 +146,27 @@ def _write_agent_state(
     return item
 
 
+def _load_skill_groups(tool_groups: list[str]) -> list[dict]:
+    loaded = []
+    for group in tool_groups:
+        try:
+            loaded.append(load_skill_tools(group))
+        except Exception as exc:
+            loaded.append({
+                "tool_group": group,
+                "status": "failed",
+                "error": str(exc),
+            })
+    return loaded
+
+
+def _auto_load_task_skill(task: str) -> dict:
+    try:
+        return detect_registry_skill(task, auto_load=True)
+    except Exception as exc:
+        return {"matched": False, "action": "error", "error": str(exc)}
+
+
 @mcp.tool()
 def list_personas() -> dict:
     """
@@ -266,6 +288,9 @@ def spawn_agent(persona: str, thread_id: str, task: str, wait_for_completion: bo
     db = _get_db()
     _ensure_active_thread(db, thread_id)
 
+    persona_skill_loads = _load_skill_groups(list(definition.ecc_tool_categories))
+    task_skill = _auto_load_task_skill(task)
+
     agent_id = f"agent_{uuid.uuid4().hex}"
     state_item = _write_agent_state(
         db,
@@ -273,10 +298,12 @@ def spawn_agent(persona: str, thread_id: str, task: str, wait_for_completion: bo
         agent_id,
         {
             "Status": "active",
-            "Persona": definition.name,
-            "Task": task,
-            "ToolsLoaded": list(definition.ecc_tool_categories),
-        },
+                "Persona": definition.name,
+                "Task": task,
+                "ToolsLoaded": list(definition.ecc_tool_categories),
+                "SkillLoads": persona_skill_loads,
+                "TaskSkill": task_skill,
+            },
     )
 
     execution: dict = {"output_sk": None}
@@ -316,6 +343,8 @@ def spawn_agent(persona: str, thread_id: str, task: str, wait_for_completion: bo
         "output_sk": execution.get("output_sk"),
         "status": "completed" if wait_for_completion else "running",
         "streaming": not wait_for_completion,
+        "skill_loads": persona_skill_loads,
+        "task_skill": task_skill,
     }
 
 

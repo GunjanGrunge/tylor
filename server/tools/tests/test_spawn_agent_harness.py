@@ -178,3 +178,48 @@ async def test_spawn_agent_return_includes_output_sk_and_status():
     assert "agent_id" in result
     assert "persona" in result
     assert "thread_id" in result
+
+
+@pytest.mark.asyncio
+async def test_spawn_agent_persists_verbose_events_for_started_chunks_and_completed():
+    fake_db = _make_fake_db()
+
+    async def fake_run(message, thread_id, thread_name="", cwd=None, system_prompt=None):
+        yield "first verbose chunk"
+        yield "\n$ Bash {\"command\":\"pytest -q\"}\n"
+
+    with patch.dict(sys.modules, {"claude_agent_sdk": MagicMock()}), \
+         patch("server.tools.agents._get_db", return_value=fake_db), \
+         patch("server.tools.agents.run_with_agents", side_effect=fake_run), \
+         patch("server.tools.agents.persist_agent_output", return_value={"output_sk": "THE_SK", "memory_id": "m"}):
+
+        from server.tools.agents import spawn_agent
+        result = spawn_agent(
+            persona="code_agent",
+            thread_id=VALID_THREAD_ID,
+            task="run tests verbosely",
+            wait_for_completion=True,
+        )
+
+    events = [call.kwargs for call in fake_db.put_agent_event.call_args_list]
+    event_types = [event["event_type"] for event in events]
+    contents = [event["content"] for event in events]
+
+    assert result["status"] == "completed"
+    assert event_types == ["started", "chunk", "chunk", "completed"]
+    assert "first verbose chunk" in contents
+    assert any("\n$ Bash" in content for content in contents)
+
+
+def test_detect_thread_team_previews_roles_and_ecc_skill():
+    from server.tools.harness import detect_thread_team
+
+    result = detect_thread_team(
+        thread_id=VALID_THREAD_ID,
+        message="review the architecture and create a flowchart diagram",
+    )
+
+    assert result["thread_id"] == VALID_THREAD_ID
+    assert "reviewer" in result["roles"]
+    assert "planner" in result["roles"]
+    assert {"tool_group": "ecc/diagrams", "action": "suggest"} in result["ecc_groups"]

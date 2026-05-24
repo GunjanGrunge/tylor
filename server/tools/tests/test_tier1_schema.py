@@ -37,6 +37,10 @@ TIER_1_TOOLS = [
     "start_afk",
     "afk_status",
     "pause_afk",
+    "open_threads_ui",
+    "run_in_thread",
+    "detect_thread_team",
+    "list_available_roles",
 ]
 
 

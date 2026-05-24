@@ -77,7 +77,8 @@ def test_spawn_agent_initializes_known_persona_in_active_thread_with_scoped_tool
 
     with patch.dict(sys.modules, {"claude_agent_sdk": MagicMock()}), patch("server.tools.agents._get_db", return_value=db), patch(
         "server.tools.agents._run_persona_agent", return_value={"output_sk": None, "output": ""}
-    ):
+    ), patch("server.tools.agents.load_skill_tools") as load_skill_tools:
+        load_skill_tools.side_effect = lambda group: {"tool_group": group, "status": "loaded", "tools": []}
         result = spawn_agent(
             persona="code_agent",
             thread_id="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1",
@@ -89,6 +90,8 @@ def test_spawn_agent_initializes_known_persona_in_active_thread_with_scoped_tool
     assert result["persona"] == "code_agent"
     assert result["thread_id"] == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1"
     assert result["tools_loaded"] == ["ecc/web", "ecc/data", "ecc/pipeline"]
+    assert [call.args[0] for call in load_skill_tools.call_args_list] == ["ecc/web", "ecc/data", "ecc/pipeline"]
+    assert [item["tool_group"] for item in result["skill_loads"]] == ["ecc/web", "ecc/data", "ecc/pipeline"]
     assert "Senior implementation engineer" in result["role_prompt"]
     assert "Implement the next story." in result["task"]
     assert result["state_sk"].startswith(f"THREAD#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1#AGENT#{result['agent_id']}#STATE")

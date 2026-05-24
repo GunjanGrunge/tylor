@@ -27,6 +27,29 @@ ECC_GROUPS = {
     "ecc/pipeline": ("server.tools.ecc.pipeline", ["pipeline_builder", "pipeline_run"]),
 }
 
+ECC_SKILLS = {
+    "ecc/web": {
+        "trigger_description": "Use for web research, fetching pages, scraping public web content, and source collection.",
+        "keywords": ["web", "website", "scrape", "fetch", "research", "source", "url", "internet"],
+    },
+    "ecc/data": {
+        "trigger_description": "Use for datasets, data cleaning, transforms, tabular analysis, and structured data work.",
+        "keywords": ["data", "dataset", "csv", "json", "table", "clean", "transform", "analysis"],
+    },
+    "ecc/presentation": {
+        "trigger_description": "Use for presentations, slides, documents, decks, reports, and polished written deliverables.",
+        "keywords": ["presentation", "slides", "deck", "ppt", "pptx", "document", "doc", "report"],
+    },
+    "ecc/diagrams": {
+        "trigger_description": "Use for diagrams, flowcharts, architecture visuals, process maps, and graph-like explanations.",
+        "keywords": ["diagram", "flowchart", "architecture", "visual", "map", "graph", "sequence"],
+    },
+    "ecc/pipeline": {
+        "trigger_description": "Use for workflows, pipelines, automation, multi-step jobs, and repeatable process execution.",
+        "keywords": ["pipeline", "workflow", "automation", "job", "run", "process", "orchestration"],
+    },
+}
+
 
 def _invalid_category(tool_group: str) -> McpError:
     return McpError(
@@ -53,8 +76,27 @@ def _registry_skills() -> list[dict]:
     return data.get("skills", [])
 
 
+def _builtin_ecc_registry_entries() -> list[dict]:
+    entries = []
+    for name, (module_path, tools) in ECC_GROUPS.items():
+        metadata = ECC_SKILLS.get(name, {})
+        entries.append({
+            "name": name,
+            "trigger_description": metadata.get("trigger_description", ""),
+            "keywords": list(metadata.get("keywords", [])),
+            "tool_count": len(tools),
+            "module": module_path,
+            "tools": list(tools),
+            "builtin": True,
+        })
+    return entries
+
+
 def _find_registry_skill(name: str) -> dict | None:
     normalized = name.strip().lower()
+    for skill in _builtin_ecc_registry_entries():
+        if skill.get("name", "").strip().lower() == normalized:
+            return skill
     for skill in _registry_skills():
         if skill.get("name", "").strip().lower() == normalized:
             return skill
@@ -154,7 +196,7 @@ def detect_registry_skill(task: str, auto_load: bool = False) -> dict:
         }
 
     tokens = _task_tokens(task)
-    for skill in _registry_skills():
+    for skill in [*_builtin_ecc_registry_entries(), *_registry_skills()]:
         name = skill.get("name", "").strip()
         if not name or not tokens.intersection(_skill_keyword_tokens(skill)):
             continue
@@ -180,7 +222,7 @@ def list_registry() -> dict:
     Returns skills sorted by install date descending.
     """
     skills = sorted(
-        _registry_skills(),
+        [*_builtin_ecc_registry_entries(), *_registry_skills()],
         key=lambda skill: skill.get("installed_date", ""),
         reverse=True,
     )
