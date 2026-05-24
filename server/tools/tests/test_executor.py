@@ -186,6 +186,45 @@ def test_execute_in_sandbox_rejects_outside_absolute_path_and_logs(tmp_path):
     assert log_call.args[1]["Path"] == "/etc/passwd"
 
 
+def test_execute_in_sandbox_runs_bumblebee_gate_for_risky_commands(tmp_path):
+    from server.tools import executor as executor_mod
+
+    mock_db = _executor_db("t1", [str(tmp_path)])
+
+    with patch.object(executor_mod, "_get_db", return_value=mock_db), patch.object(
+        executor_mod, "run_bumblebee_security_gate", return_value=True
+    ) as security_gate, patch.object(executor_mod, "_log_thread_event") as log_event:
+        executor_mod.execute_in_sandbox(
+            command="python3 -m pip install requests",
+            cwd=str(tmp_path),
+        )
+
+    security_gate.assert_called_once_with("python3 -m pip install requests", str(tmp_path))
+    log_event.assert_any_call(
+        mock_db,
+        "t1",
+        "security_gate",
+        {
+            "Command": "python3 -m pip install requests",
+            "Cwd": str(tmp_path),
+            "Outcome": "passed",
+            "Content": "Bumblebee security gate flagged this command and completed a scan successfully.",
+        },
+    )
+
+
+def test_bumblebee_security_gate_missing_cli_suggests_alternatives():
+    from server.tools import security as security_mod
+
+    with patch.object(security_mod, "_bumblebee_path", return_value=None):
+        with pytest.raises(ToolError) as excinfo:
+            security_mod.run_bumblebee_security_gate("python3 -m pip install requests", "/tmp")
+
+    assert "Bumblebee security gate is enabled by default" in str(excinfo.value)
+    assert "Suggested alternatives" in str(excinfo.value)
+    assert "BUMBLEBEE_ENABLED=false" in str(excinfo.value)
+
+
 def test_execute_in_sandbox_rejects_symlink_escape(tmp_path):
     from server.tools import executor as executor_mod
 

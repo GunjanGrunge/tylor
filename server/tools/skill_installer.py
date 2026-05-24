@@ -12,6 +12,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ErrorData, INVALID_PARAMS
 
 from ._mcp import mcp
+from .security import validate_skill_package
 
 PLUGIN_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_SKILLS_DIR = PLUGIN_DIR / "skills"
@@ -161,6 +162,8 @@ def install_skill(
     skill_file = source / "SKILL.md"
     if not skill_file.exists():
         raise _invalid_params(f"SKILL.md not found in {source}")
+
+    validate_skill_package(source)
 
     if skill_file.stat().st_size > _SKILL_MD_MAX_BYTES:
         raise _invalid_params(f"SKILL.md exceeds maximum size of {_SKILL_MD_MAX_BYTES // 1024} KB")

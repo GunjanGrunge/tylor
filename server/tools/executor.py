@@ -13,6 +13,7 @@ from pathlib import Path
 from mcp.server.fastmcp.exceptions import ToolError
 
 from ._mcp import mcp
+from .security import run_bumblebee_security_gate
 
 
 NO_SANDBOX_MESSAGE = "No sandbox configured — run /set-sandbox <path> first"
@@ -346,6 +347,20 @@ def execute_in_sandbox(
     if not _is_inside_roots(workdir, roots):
         _raise_violation(db, resolved_thread_id, command, cwd or workdir, workdir)
     _validate_command_paths(db, resolved_thread_id, command, workdir, roots)
+
+    checked = run_bumblebee_security_gate(command, workdir)
+    if checked:
+        _log_thread_event(
+            db,
+            resolved_thread_id,
+            "security_gate",
+            {
+                "Command": command,
+                "Cwd": workdir,
+                "Outcome": "passed",
+                "Content": "Bumblebee security gate flagged this command and completed a scan successfully.",
+            },
+        )
 
     start = time.monotonic()
     try:

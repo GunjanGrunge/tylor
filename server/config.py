@@ -70,6 +70,8 @@ def _load() -> dict:
         "s3_bucket":      _get("S3_BUCKET"),
         "opensearch_host": _get("OPENSEARCH_HOST"),
         "opensearch_port": _get("OPENSEARCH_PORT", default="9200"),
+        "bumblebee_enabled": str(_get("BUMBLEBEE_ENABLED", default="true")).strip().lower() in {"1", "true", "yes", "on"},
+        "bumblebee_path": _get("BUMBLEBEE_PATH"),
     }
 
     if cfg["storage_mode"] not in {"local", "aws"}:

@@ -126,6 +126,25 @@ Tylor exposes a suite of powerful commands directly within Claude:
 
 ---
 
+## 🔒 Bumblebee Security Gate
+
+Tylor now includes a default, plugin-wide security gate powered by Bumblebee. When a risky command is detected—especially package installs, extension installs, skill/package additions, or MCP config changes—Tylor will initiate a read-only Bumblebee scan before the command runs.
+
+- Enabled by default for any command pattern that looks like `pip install`, `npm install`, editor/extension installs, or skill/config setup.
+- If Bumblebee is missing, Tylor will flag the command and surface clear guidance instead of executing it blindly.
+- If Bumblebee detects risk, execution is blocked and the user sees actionable alternatives.
+
+Suggested responses from the gate include:
+
+- Install Bumblebee or set `BUMBLEBEE_PATH` if the CLI is not found.
+- Run `bumblebee scan --json` manually before retrying.
+- Disable the gate temporarily with `BUMBLEBEE_ENABLED=false` only if you understand the risk.
+- Review package metadata, MCP config changes, and AI tool integrations before proceeding.
+
+This layer applies across the plugin, regardless of which thread or persona is active.
+
+---
+
 ## 🎭 Sub-Agents & Personas
 
 Tylor comes pre-equipped with specialist sub-agents. Claude will **automatically invoke** these personas based on the nature of your query—no manual intervention required.

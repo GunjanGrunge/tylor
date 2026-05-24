@@ -4,6 +4,7 @@ Run: pytest server/tools/tests/test_skill_installer.py -v
 """
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from mcp.shared.exceptions import McpError
@@ -79,6 +80,24 @@ def test_install_skill_requires_skill_markdown(tmp_path):
 
     assert excinfo.value.error.code == INVALID_PARAMS
     assert "SKILL.md not found" in excinfo.value.error.message
+
+
+def test_install_skill_runs_bumblebee_security_check_for_skill_package(tmp_path):
+    from server.tools.skill_installer import install_skill
+
+    source = _write_skill_package(tmp_path / "source")
+    skills_dir = tmp_path / "skills"
+    registry_path = tmp_path / "registry.json"
+    registry_path.write_text('{"version":"1.0","skills":[]}', encoding="utf-8")
+
+    with patch("server.tools.skill_installer.validate_skill_package") as validate_package:
+        install_skill(
+            source_path=source,
+            skills_dir=skills_dir,
+            registry_path=registry_path,
+        )
+
+    validate_package.assert_called_once_with(source)
 
 
 def test_install_skill_duplicate_requires_overwrite_confirmation(tmp_path):
