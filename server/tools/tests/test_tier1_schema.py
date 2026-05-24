@@ -26,6 +26,7 @@ TIER_1_TOOLS = [
     "list_threads",
     "list_personas",
     "spawn_agent",
+    "spawn_agents",
     "load_skill_tools",
     "list_registry",
     "help_agent101",
@@ -131,6 +132,15 @@ def test_spawn_agent_signature():
     assert "thread_id" in sig.parameters
     assert "persona" in sig.parameters
     assert "task" in sig.parameters
+    assert "wait_for_completion" in sig.parameters
+
+
+def test_spawn_agents_signature():
+    from server.tools.agents import spawn_agents
+    sig = inspect.signature(spawn_agents)
+    assert "thread_id" in sig.parameters
+    assert "agents" in sig.parameters
+    assert "wait_for_completion" in sig.parameters
 
 
 def test_list_personas_signature():
@@ -250,8 +260,8 @@ def test_config_loads_without_crash():
     assert isinstance(mod.config, dict)
 
 
-def test_config_warns_on_missing_platform_key(caplog):
-    """Missing Platform on AWS API key must emit a warning."""
+def test_config_does_not_warn_on_missing_optional_cloud_keys(caplog):
+    """Missing cloud keys are normal in local-first mode."""
     env_backup = os.environ.pop("ANTHROPIC_PLATFORM_AWS_API_KEY", None)
     aws_env_backup = os.environ.pop("ANTHROPIC_AWS_API_KEY", None)
     try:
@@ -261,7 +271,7 @@ def test_config_warns_on_missing_platform_key(caplog):
             del sys.modules["server.config"]
         with caplog.at_level(logging.WARNING, logger="server.config"):
             importlib.import_module("server.config")
-        assert any("ANTHROPIC_PLATFORM_AWS_API_KEY" in r.message for r in caplog.records)
+        assert not any("ANTHROPIC_PLATFORM_AWS_API_KEY" in r.message for r in caplog.records)
     finally:
         os.environ.pop("ANTHROPIC_PLATFORM_AWS_API_KEY", None)
         os.environ.pop("ANTHROPIC_AWS_API_KEY", None)

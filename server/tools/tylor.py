@@ -81,15 +81,16 @@ def _get_db():
     Default: JsonStore (local ~/.tylor/threads.json, zero setup).
     Optional: DynamoClient when AWS credentials + DYNAMO_TABLE are configured.
     """
-    from server.config import config
+    from ..config import config
 
-    # Use DynamoDB ONLY when user has explicitly set DYNAMO_TABLE env var
-    # (not just because AWS credentials happen to exist on the machine)
-    import os
-    use_dynamo = bool(os.environ.get("DYNAMO_TABLE") or os.environ.get("TYLOR_USE_DYNAMO"))
+    # Use DynamoDB ONLY when explicitly requested. Local JSON is the default.
+    use_dynamo = (
+        config.get("storage_mode") == "aws"
+        or os.environ.get("TYLOR_USE_DYNAMO", "").lower() in {"1", "true", "yes"}
+    )
 
     if use_dynamo:
-        from server.storage.dynamo import DynamoClient
+        from ..storage.dynamo import DynamoClient
         return DynamoClient(
             table_name=os.environ.get("DYNAMO_TABLE", "agent101"),
             user_id=config.get("user_id", "default"),
@@ -98,15 +99,15 @@ def _get_db():
 
     # Default: local JSON storage — no AWS required
     from pathlib import Path
-    from server.storage.json_store import JsonStore
+    from ..storage.json_store import JsonStore
     store_path = Path(config.get("storage_path") or Path.home() / ".tylor" / "threads.json")
     return JsonStore(path=store_path)
 
 
 def _get_memory_client():
     """Return an OpenSearchClient configured from server.config."""
-    from server.config import config
-    from server.storage.opensearch import OpenSearchClient
+    from ..config import config
+    from ..storage.opensearch import OpenSearchClient
 
     host = config.get("opensearch_host")
     if not host:
@@ -123,7 +124,7 @@ def _get_memory_client():
 
 def _code_index_header_for_thread(thread_id: str, thread_name: str = "") -> str:
     try:
-        from server.tools.hooks import build_code_index_header
+        from .hooks import build_code_index_header
 
         return build_code_index_header(thread_id, thread_name)
     except Exception:

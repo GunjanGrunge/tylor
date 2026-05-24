@@ -288,8 +288,6 @@ def test_platform_key_present_via_env():
 # --- AC8: run_all exits 0 even when all AWS checks fail ---
 
 def test_run_all_is_advisory(tmp_path, capsys):
-    from botocore.exceptions import NoCredentialsError
-
     with (
         patch("server.validate.check_dynamodb", return_value=(False, "  ✗  DynamoDB — no creds")),
         patch("server.validate.check_s3",       return_value=(False, "  ✗  S3 — no creds")),
@@ -299,8 +297,24 @@ def test_run_all_is_advisory(tmp_path, capsys):
     ):
         error_count = run_all(str(tmp_path))
 
-    assert error_count == 3  # 3 AWS failures counted
-    # Caller (install.sh) always exits 0 — this just returns the count
+    assert error_count == 0
+    # Local JSON storage is the default; AWS failures are irrelevant until opted in.
+
+
+def test_run_all_counts_aws_failures_when_explicitly_enabled(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENT101_ENABLE_AWS", "1")
+    validate_module = run_all.__module__
+
+    with (
+        patch(f"{validate_module}.check_dynamodb", return_value=(False, "  ✗  DynamoDB — no creds")),
+        patch(f"{validate_module}.check_s3",       return_value=(False, "  ✗  S3 — no creds")),
+        patch(f"{validate_module}.check_bedrock",  return_value=(False, "  ✗  Bedrock — no creds")),
+        patch(f"{validate_module}.check_opensearch", return_value=(True, "  ⚠   OpenSearch — skipped")),
+        patch(f"{validate_module}.check_platform_key", return_value=(True, "  ⚠   key not set")),
+    ):
+        error_count = run_all(str(tmp_path))
+
+    assert error_count == 3
 
 
 # ---------------------------------------------------------------------------

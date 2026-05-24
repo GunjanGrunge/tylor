@@ -152,7 +152,7 @@ def checkpoint_current_thread(
     return {"status": "checkpointed", "thread_id": thread_id}
 
 
-_THREAD_ID_RE = re.compile(r"^[a-f0-9]{32}$")
+_THREAD_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{2,64}$")
 
 
 def dispatch_kill_thread_summary(

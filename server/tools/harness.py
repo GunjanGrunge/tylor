@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from typing import AsyncIterator
 
-from server.tools._mcp import mcp
+from ._mcp import mcp
 
 # ── 5 roles (lenses, not knowledge bases) ────────────────────────────────────
 
@@ -225,6 +225,34 @@ def _save_session_id(thread_id: str, session_id: str) -> None:
 
 # ── Core harness ──────────────────────────────────────────────────────────────
 
+def _block_to_verbose_text(block) -> str | None:
+    text = getattr(block, "text", None)
+    if isinstance(text, str) and text:
+        return text
+
+    block_type = getattr(block, "type", None) or block.__class__.__name__
+    name = getattr(block, "name", None)
+    tool_input = getattr(block, "input", None)
+    content = getattr(block, "content", None)
+
+    if name:
+        suffix = ""
+        if tool_input:
+            try:
+                suffix = " " + json.dumps(tool_input, ensure_ascii=False)[:500]
+            except Exception:
+                suffix = f" {tool_input!s}"[:500]
+        return f"\n$ {name}{suffix}\n"
+
+    if content:
+        if isinstance(content, str):
+            return f"\n[{block_type}] {content}\n"
+        return f"\n[{block_type}] {content!s}\n"
+
+    if block_type and block_type not in {"TextBlock", "text"}:
+        return f"\n[{block_type}]\n"
+    return None
+
 async def run_with_agents(
     message: str,
     thread_id: str,
@@ -265,16 +293,16 @@ async def run_with_agents(
             if sid:
                 new_session_id = sid
 
-            # Stream text content from AssistantMessage
-            # content is List[TextBlock | ToolUseBlock | ...] or str
+            # Stream text and tool activity so the UI can mirror terminal-style
+            # verbose agent progress instead of only showing final answers.
             content = getattr(msg, "content", None) or getattr(msg, "text", None)
             if isinstance(content, str) and content:
                 yield content
             elif isinstance(content, list):
                 for block in content:
-                    text = getattr(block, "text", None)
-                    if isinstance(text, str) and text:
-                        yield text
+                    verbose = _block_to_verbose_text(block)
+                    if verbose:
+                        yield verbose
 
     except Exception as exc:
         yield f"\n⚠️  Error: {exc}"

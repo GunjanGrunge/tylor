@@ -3,6 +3,7 @@ Tests for Story 3.2: spawn_agent and list_personas tools
 Run: pytest server/tools/tests/test_agents.py -v
 """
 from pathlib import Path
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -74,11 +75,14 @@ def test_spawn_agent_initializes_known_persona_in_active_thread_with_scoped_tool
 
     db = FakeDb({"SK": "THREAD#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1#META", "Status": "active"})
 
-    with patch("server.tools.agents._get_db", return_value=db):
+    with patch.dict(sys.modules, {"claude_agent_sdk": MagicMock()}), patch("server.tools.agents._get_db", return_value=db), patch(
+        "server.tools.agents._run_persona_agent", return_value={"output_sk": None, "output": ""}
+    ):
         result = spawn_agent(
             persona="code_agent",
             thread_id="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1",
             task="Implement the next story.",
+            wait_for_completion=True,
         )
 
     assert result["agent_id"].startswith("agent_")
@@ -100,18 +104,24 @@ def test_spawn_agent_keeps_parallel_thread_agents_scoped_to_own_thread():
     db_alpha = FakeDb({"SK": "THREAD#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2#META", "Status": "active"})
     db_beta = FakeDb({"SK": "THREAD#bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb#META", "Status": "active"})
 
-    with patch("server.tools.agents._get_db", return_value=db_alpha):
+    with patch.dict(sys.modules, {"claude_agent_sdk": MagicMock()}), patch("server.tools.agents._get_db", return_value=db_alpha), patch(
+        "server.tools.agents._run_persona_agent", return_value={"output_sk": None, "output": ""}
+    ):
         alpha = spawn_agent(
             persona="analyst",
             thread_id="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2",
             task="Analyze alpha.",
+            wait_for_completion=True,
         )
 
-    with patch("server.tools.agents._get_db", return_value=db_beta):
+    with patch.dict(sys.modules, {"claude_agent_sdk": MagicMock()}), patch("server.tools.agents._get_db", return_value=db_beta), patch(
+        "server.tools.agents._run_persona_agent", return_value={"output_sk": None, "output": ""}
+    ):
         beta = spawn_agent(
             persona="cto",
             thread_id="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             task="Analyze beta.",
+            wait_for_completion=True,
         )
 
     assert alpha["thread_id"] == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2"
@@ -128,7 +138,7 @@ def test_spawn_agent_rejects_inactive_thread():
     db = FakeDb({"SK": "THREAD#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1#META", "Status": "killed"})
 
     with pytest.raises(McpError) as excinfo:
-        with patch("server.tools.agents._get_db", return_value=db):
+        with patch.dict(sys.modules, {"claude_agent_sdk": MagicMock()}), patch("server.tools.agents._get_db", return_value=db):
             spawn_agent(persona="analyst", thread_id="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1", task="Analyze market.")
 
     assert excinfo.value.error.code == INVALID_PARAMS

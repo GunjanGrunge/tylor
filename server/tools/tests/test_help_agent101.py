@@ -71,6 +71,7 @@ def test_help_index_lists_commands_tools_registry_personas_and_ecc(tmp_path):
         "list_threads",
         "list_personas",
         "spawn_agent",
+        "spawn_agents",
         "load_skill_tools",
         "list_registry",
         "help_agent101",

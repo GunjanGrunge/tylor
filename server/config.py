@@ -1,8 +1,8 @@
 """
 server/config.py — Agent101 server configuration.
-Reads AWS profile, Bedrock region, and Platform on AWS key.
+Reads local storage settings and optional cloud provider settings.
 Resolution order: env var → ~/.agent101/config.json → .env file → defaults.
-Warns on missing optional config; never crashes on startup.
+Missing cloud settings are normal in local-first mode; startup never crashes.
 """
 from __future__ import annotations
 import json
@@ -57,6 +57,7 @@ def _load() -> dict:
     cfg = {
         "aws_profile":       _get("AWS_PROFILE"),
         "aws_access_key_id": _get("AWS_ACCESS_KEY_ID"),
+        "storage_mode": _get("AGENT101_STORAGE_MODE", default="local"),
         "bedrock_region": _get("BEDROCK_REGION", default="us-east-1"),
         "bedrock_opus_model": _get(
             "BEDROCK_OPUS_MODEL",
@@ -71,17 +72,9 @@ def _load() -> dict:
         "opensearch_port": _get("OPENSEARCH_PORT", default="9200"),
     }
 
-    # Warn on optional keys that affect runtime features
-    if not cfg["platform_key"]:
-        logger.warning(
-            "ANTHROPIC_PLATFORM_AWS_API_KEY/ANTHROPIC_AWS_API_KEY not set — "
-            "token overflow fallback to Claude Platform on AWS is disabled"
-        )
-    if not cfg["opensearch_host"]:
-        logger.warning(
-            "OPENSEARCH_HOST not set — "
-            "semantic memory recall (recall_memory) will be unavailable until configured"
-        )
+    if cfg["storage_mode"] not in {"local", "aws"}:
+        logger.warning("Unknown AGENT101_STORAGE_MODE=%s; falling back to local mode", cfg["storage_mode"])
+        cfg["storage_mode"] = "local"
 
     return cfg
 

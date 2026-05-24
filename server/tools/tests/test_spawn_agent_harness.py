@@ -60,7 +60,7 @@ async def test_spawn_agent_calls_harness_with_persona_prompt():
         from server.tools.agents import spawn_agent, load_persona
         persona_def = load_persona("code_agent")
 
-        result = spawn_agent(persona="code_agent", thread_id=VALID_THREAD_ID, task="build the thing")
+        result = spawn_agent(persona="code_agent", thread_id=VALID_THREAD_ID, task="build the thing", wait_for_completion=True)
 
     assert fake_run.captured_system_prompt == persona_def.role_prompt
     assert fake_run.captured_message == "build the thing"
@@ -86,7 +86,7 @@ async def test_spawn_agent_persists_output():
          patch("server.tools.agents.persist_agent_output", persist_mock):
 
         from server.tools.agents import spawn_agent
-        spawn_agent(persona="code_agent", thread_id=VALID_THREAD_ID, task="analyse data")
+        spawn_agent(persona="code_agent", thread_id=VALID_THREAD_ID, task="analyse data", wait_for_completion=True)
 
     persist_mock.assert_called_once()
     call_kwargs = persist_mock.call_args
@@ -111,7 +111,7 @@ async def test_spawn_agent_marks_state_completed():
          patch("server.tools.agents.persist_agent_output", return_value={"output_sk": "SK", "memory_id": "m"}):
 
         from server.tools.agents import spawn_agent
-        spawn_agent(persona="code_agent", thread_id=VALID_THREAD_ID, task="review code")
+        spawn_agent(persona="code_agent", thread_id=VALID_THREAD_ID, task="review code", wait_for_completion=True)
 
     # put_agent_state called twice: once for "active", once for "completed"
     calls = fake_db.put_agent_state.call_args_list
@@ -170,7 +170,7 @@ async def test_spawn_agent_return_includes_output_sk_and_status():
          patch("server.tools.agents.persist_agent_output", return_value={"output_sk": "THE_SK", "memory_id": "m"}):
 
         from server.tools.agents import spawn_agent
-        result = spawn_agent(persona="analyst", thread_id=VALID_THREAD_ID, task="crunch numbers")
+        result = spawn_agent(persona="analyst", thread_id=VALID_THREAD_ID, task="crunch numbers", wait_for_completion=True)
 
     assert "output_sk" in result
     assert result["output_sk"] == "THE_SK"

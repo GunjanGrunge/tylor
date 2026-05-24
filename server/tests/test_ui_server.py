@@ -15,9 +15,17 @@ import socket
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 from pathlib import Path
+import importlib
 
 from aiohttp.test_utils import AioHTTPTestCase
 from aiohttp import web
+
+
+UI_SERVER_MODULE = __package__.rsplit(".tests", 1)[0] + ".ui_server"
+
+
+def ui_server_module():
+    return importlib.import_module(UI_SERVER_MODULE)
 
 
 # ── Fixture helpers ──────────────────────────────────────────────────────────
@@ -51,7 +59,7 @@ class TestRestEndpoints(AioHTTPTestCase):
 
     async def get_application(self):
         # Patch storage calls before building the app
-        with patch("server.ui_server._fetch_threads", return_value=[
+        with patch(UI_SERVER_MODULE + "._fetch_threads", return_value=[
             {"id": t["thread_id"], "title": t["name"], "status": t["status"],
              "created_at": t["last_activity"], "message_count": t["message_count"]}
             for t in MOCK_THREADS
@@ -60,7 +68,7 @@ class TestRestEndpoints(AioHTTPTestCase):
             return _make_app()
 
     async def test_get_threads_returns_json_array(self):
-        with patch("server.ui_server._fetch_threads", return_value=[
+        with patch(UI_SERVER_MODULE + "._fetch_threads", return_value=[
             {"id": "abc123", "title": "Backend", "status": "active",
              "created_at": "2026-05-13T10:00:00Z", "message_count": 5}
         ]):
@@ -73,7 +81,7 @@ class TestRestEndpoints(AioHTTPTestCase):
             assert thread["title"] == "Backend"
 
     async def test_get_messages_returns_json_array(self):
-        with patch("server.ui_server._fetch_messages", return_value=MOCK_MESSAGES):
+        with patch(UI_SERVER_MODULE + "._fetch_messages", return_value=MOCK_MESSAGES):
             resp = await self.client.get("/api/threads/abc123/messages")
             assert resp.status == 200
             data = await resp.json()
@@ -97,7 +105,7 @@ async def test_websocket_initial_payload():
 
     app = _make_app()
 
-    with patch("server.ui_server._fetch_threads", return_value=[
+    with patch(UI_SERVER_MODULE + "._fetch_threads", return_value=[
         {"id": "abc123", "title": "Backend", "status": "active",
          "created_at": "2026-05-13T10:00:00Z", "message_count": 5}
     ]):
@@ -122,7 +130,7 @@ async def test_websocket_broadcast_reaches_all_clients():
 
     app = _make_app()
 
-    with patch("server.ui_server._fetch_threads", return_value=[]):
+    with patch(UI_SERVER_MODULE + "._fetch_threads", return_value=[]):
         async with TestClient(TestServer(app)) as client:
             ws1 = await client.ws_connect("/ws/threads")
             ws2 = await client.ws_connect("/ws/threads")
@@ -151,9 +159,9 @@ async def test_websocket_broadcast_reaches_all_clients():
 # ── Test: Port-in-use ─────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_port_in_use_sets_ui_unavailable():
-    """When port 8765 is occupied, start_ui_server returns None and ui_available=False."""
-    import server.ui_server as ui_mod
+async def test_port_in_use_falls_back_to_next_available_port():
+    """When port 8765 is occupied, start_ui_server binds the next available port."""
+    ui_mod = ui_server_module()
 
     # Occupy the port
     blocker = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -163,12 +171,15 @@ async def test_port_in_use_sets_ui_unavailable():
         blocker.listen(1)
 
         runner = await ui_mod.start_ui_server()
-        assert runner is None
-        assert ui_mod.ui_available is False
+        assert runner is not None
+        assert ui_mod.ui_available is True
+        assert ui_mod.PORT != 8765
+        await runner.cleanup()
     finally:
         blocker.close()
         # Reset for other tests
         ui_mod.ui_available = False
+        ui_mod.PORT = 8765
 
 
 # ── Test: WsManager ────────────────────────────────────────────────────────────
@@ -196,7 +207,7 @@ async def test_ws_manager_drops_closed_clients():
 async def test_ws_manager_sequence_increments():
     """Each broadcast increments the seq counter."""
     from ..ui_server import WsManager
-    import server.ui_server as ui_mod
+    ui_mod = ui_server_module()
 
     ui_mod._seq = 0
     mgr = WsManager()
@@ -235,7 +246,7 @@ async def test_api_threads_returns_all_five_fields():
     from aiohttp.test_utils import TestServer, TestClient
 
     app = _make_app()
-    with patch("server.ui_server._fetch_threads", return_value=FULL_MOCK_THREADS):
+    with patch(UI_SERVER_MODULE + "._fetch_threads", return_value=FULL_MOCK_THREADS):
         async with TestClient(TestServer(app)) as client:
             resp = await client.get("/api/threads")
             assert resp.status == 200
@@ -258,7 +269,7 @@ async def test_api_threads_returns_empty_list_not_null():
     from aiohttp.test_utils import TestServer, TestClient
 
     app = _make_app()
-    with patch("server.ui_server._fetch_threads", return_value=[]):
+    with patch(UI_SERVER_MODULE + "._fetch_threads", return_value=[]):
         async with TestClient(TestServer(app)) as client:
             resp = await client.get("/api/threads")
             assert resp.status == 200
@@ -278,7 +289,7 @@ async def test_api_thread_messages_valid_id_returns_array():
     mock_msgs = [
         {"role": "user", "content": "Hello", "timestamp": "2026-05-13T09:00:00Z"},
     ]
-    with patch("server.ui_server._fetch_messages", return_value=mock_msgs):
+    with patch(UI_SERVER_MODULE + "._fetch_messages", return_value=mock_msgs):
         async with TestClient(TestServer(app)) as client:
             resp = await client.get(f"/api/threads/{valid_id}/messages")
             assert resp.status == 200
@@ -301,7 +312,7 @@ async def test_api_thread_messages_returns_role_content_timestamp():
         {"role": "user",      "content": "Hello",    "timestamp": "2026-05-13T09:00:00Z"},
         {"role": "assistant", "content": "Hi there", "timestamp": "2026-05-13T09:01:00Z"},
     ]
-    with patch("server.ui_server._fetch_messages", return_value=mock_msgs):
+    with patch(UI_SERVER_MODULE + "._fetch_messages", return_value=mock_msgs):
         async with TestClient(TestServer(app)) as client:
             resp = await client.get(f"/api/threads/{valid_id}/messages")
             assert resp.status == 200
@@ -321,7 +332,7 @@ async def test_api_thread_messages_before_param_accepted():
 
     app = _make_app()
     valid_id = "abc123def456abc123def456abc12345"
-    with patch("server.ui_server._fetch_messages", return_value=[]):
+    with patch(UI_SERVER_MODULE + "._fetch_messages", return_value=[]):
         async with TestClient(TestServer(app)) as client:
             resp = await client.get(
                 f"/api/threads/{valid_id}/messages?before=2026-05-13T09:00:00Z"
@@ -336,10 +347,10 @@ async def test_ws_thread_update_broadcasts_to_all_clients():
     """After a thread state change, all WS clients receive thread_update."""
     from ..ui_server import _make_app, ws_manager
     from aiohttp.test_utils import TestServer, TestClient
-    import server.ui_server as ui_mod
+    ui_mod = ui_server_module()
 
     app = _make_app()
-    with patch("server.ui_server._fetch_threads", return_value=[
+    with patch(UI_SERVER_MODULE + "._fetch_threads", return_value=[
         {"id": "abc123", "title": "Backend", "status": "active",
          "created_at": "2026-05-13T10:00:00Z", "message_count": 5}
     ]):
@@ -374,7 +385,7 @@ async def test_ws_initial_payload_has_thread_update_type():
     from aiohttp.test_utils import TestServer, TestClient
 
     app = _make_app()
-    with patch("server.ui_server._fetch_threads", return_value=[]):
+    with patch(UI_SERVER_MODULE + "._fetch_threads", return_value=[]):
         async with TestClient(TestServer(app)) as client:
             ws = await client.ws_connect("/ws/threads")
             msg = await asyncio.wait_for(ws.receive(), timeout=2.0)

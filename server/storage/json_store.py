@@ -104,7 +104,7 @@ class JsonStore:
             "name": name, "status": "active",
             "created_at": now, "updated_at": now,
             "messages": [], "summary": None,
-            "sandbox_roots": [], "agent_states": {}, "agent_outputs": [],
+            "sandbox_roots": [], "agent_states": {}, "agent_outputs": [], "agent_events": [],
         }
         data["threads"].append(thread)
         self._save(data)
@@ -170,7 +170,7 @@ class JsonStore:
                         "project": item.get("Project", ""),
                         "created_at": item.get("CreatedAt", now),
                         "updated_at": now, "messages": [], "summary": None,
-                        "sandbox_roots": [], "agent_states": {}, "agent_outputs": [],
+                        "sandbox_roots": [], "agent_states": {}, "agent_outputs": [], "agent_events": [],
                     }
                     data["threads"].append(thread)
                     self._save(data)
@@ -252,6 +252,8 @@ class JsonStore:
         }]
         for msg in t.get("messages", []):
             items.append(msg)
+        for event in t.get("agent_events", []):
+            items.append(event)
         return items
 
     def query_thread(self, thread_id: str, sk_prefix: str) -> list:
@@ -332,6 +334,33 @@ class JsonStore:
         self._save(data)
         return item
 
+    def put_agent_event(
+        self,
+        thread_id: str,
+        agent_id: str,
+        event_type: str,
+        content: str,
+        persona: str | None = None,
+    ) -> dict:
+        data = self._load()
+        t = self._require(data, thread_id)
+        now = _now_iso()
+        item = {
+            "SK": f"THREAD#{thread_id}#AGENT#{agent_id}#EVENT#{now}#{uuid.uuid4().hex}",
+            "ThreadId": thread_id,
+            "AgentId": agent_id,
+            "Type": "agent_event",
+            "EventType": event_type,
+            "Content": content,
+            "CreatedAt": now,
+        }
+        if persona:
+            item["Persona"] = persona
+        t.setdefault("agent_events", []).append(item)
+        t["updated_at"] = now
+        self._save(data)
+        return item
+
     def put_agent_handoff(self, thread_id: str, agent_id: str, handoff_state: dict) -> dict:
         data = self._load()
         t = self._require(data, thread_id)
@@ -357,3 +386,13 @@ class JsonStore:
         if not t:
             return []
         return [{"AgentId": aid, **s} for aid, s in t.get("agent_states", {}).items()]
+
+    def query_agent_events(self, thread_id: str, agent_id: str | None = None) -> list:
+        data = self._load()
+        t = self._find(data, thread_id)
+        if not t:
+            return []
+        events = list(t.get("agent_events", []))
+        if agent_id:
+            events = [e for e in events if e.get("AgentId") == agent_id]
+        return sorted(events, key=lambda e: e.get("SK", ""))

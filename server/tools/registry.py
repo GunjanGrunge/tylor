@@ -156,7 +156,7 @@ def detect_registry_skill(task: str, auto_load: bool = False) -> dict:
     tokens = _task_tokens(task)
     for skill in _registry_skills():
         name = skill.get("name", "").strip()
-        if not name or len(tokens.intersection(_skill_keyword_tokens(skill))) < 2:
+        if not name or not tokens.intersection(_skill_keyword_tokens(skill)):
             continue
 
         if auto_load and skill.get("module") and skill.get("tools"):

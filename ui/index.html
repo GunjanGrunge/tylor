@@ -160,6 +160,7 @@ html,body{
 .role-user{background:rgba(0,255,179,0.1);color:rgba(0,255,179,0.85);border:1px solid rgba(0,255,179,0.25)}
 .role-assistant{background:rgba(139,92,246,0.1);color:rgba(180,140,255,0.85);border:1px solid rgba(139,92,246,0.25)}
 .role-tool{background:rgba(251,191,36,0.1);color:rgba(251,191,36,0.85);border:1px solid rgba(251,191,36,0.25)}
+.role-agent{background:rgba(34,211,238,0.1);color:rgba(125,230,245,0.9);border:1px solid rgba(34,211,238,0.28)}
 .msg-ts{font-size:9.5px;color:rgba(255,255,255,0.25)}
 .msg-body{
   font-size:11.5px;line-height:1.6;color:rgba(255,255,255,0.65);
@@ -167,11 +168,41 @@ html,body{
 }
 .msg-body.role-user-body{border-color:rgba(0,255,179,0.18)}
 .msg-body.role-assistant-body{border-color:rgba(139,92,246,0.2)}
+.msg-body.role-agent-body{border-color:rgba(34,211,238,0.22)}
 .msg-body p{margin:0 0 4px}
 .msg-body code{font-family:var(--font);font-size:10.5px;
   background:rgba(139,92,246,0.1);padding:1px 5px;border-radius:3px}
 .msg-body pre{background:rgba(0,0,0,0.3);border-radius:6px;padding:8px;
   overflow-x:auto;margin:4px 0}
+
+/* Agent monitor */
+#agents-panel{
+  flex-shrink:0;margin:10px 20px 0;padding:10px;
+  border:1px solid rgba(34,211,238,0.16);
+  background:rgba(34,211,238,0.045);
+  border-radius:8px;display:none;flex-direction:column;gap:8px;
+  max-height:180px;overflow:auto;
+}
+.agent-row{
+  display:grid;grid-template-columns:10px 1fr auto;gap:8px;align-items:center;
+  padding:7px 8px;border-radius:6px;background:rgba(255,255,255,0.025);
+  border:1px solid rgba(255,255,255,0.04);cursor:pointer;
+}
+.agent-row:hover{border-color:rgba(34,211,238,0.22)}
+.agent-dot{width:8px;height:8px;border-radius:50%;background:rgba(125,230,245,0.85);box-shadow:0 0 8px rgba(34,211,238,0.4)}
+.agent-dot.completed{background:rgba(0,255,179,0.75)}
+.agent-dot.failed{background:rgba(239,80,80,0.85)}
+.agent-name{font-size:10px;color:rgba(255,255,255,0.82);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.agent-task{font-size:9px;color:rgba(255,255,255,0.36);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.agent-status{font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,0.38)}
+.agent-log{
+  background:rgba(0,0,0,0.28);
+  border-color:rgba(34,211,238,0.12);
+}
+.agent-log pre{
+  white-space:pre-wrap;word-break:break-word;margin:0;
+  color:rgba(210,245,255,0.72);font-size:10.5px;line-height:1.5;
+}
 
 /* Responsive: full-width below 900px */
 @media(max-width:900px){
@@ -230,6 +261,7 @@ html,body{
 .tc-footer{display:flex;align-items:center;justify-content:space-between}
 .tc-msgs{font-size:8.5px;color:rgba(255,255,255,0.3)}
 .tc-time{font-size:8.5px;color:rgba(255,255,255,0.3)}
+.tc-agents{font-size:8.5px;color:rgba(125,230,245,0.72)}
 
 .project-card{
   width:220px;height:56px;
@@ -348,6 +380,7 @@ html,body{
     </div>
   </div>
   <button id="load-earlier" onclick="loadEarlier()">↑ Load earlier messages</button>
+  <div id="agents-panel"></div>
   <div id="msgs"></div>
   <button id="jump-latest" onclick="jumpToLatest()">↓ Latest</button>
 </div>
@@ -401,6 +434,8 @@ let projects = [];
 let currentThreadId = null;
 let viewMode = 'home'; // 'home' or 'focused'
 let focusedProjectId = null;
+const agentsByThread = new Map();
+const agentLogs = new Map();
 
 // ── Time formatting ───────────────────────────
 function timeAgo(ts){
@@ -619,7 +654,9 @@ function renderFocused(){
     div.append('xhtml:div').attr('class','tc-preview')
       .text(t.last_message || 'No messages yet');
     const footer = div.append('xhtml:div').attr('class','tc-footer');
-    footer.append('xhtml:span').attr('class','tc-msgs').text(`💬 ${t.message_count || 0}`);
+    footer.append('xhtml:span').attr('class','tc-msgs').text(`msg ${t.message_count || 0}`);
+    const activeAgents = t.active_agent_count || (t.agents||[]).filter(a => ['active','running'].includes(a.status)).length;
+    footer.append('xhtml:span').attr('class','tc-agents').text(activeAgents ? `${activeAgents} agents` : '');
     footer.append('xhtml:span').attr('class','tc-time').text(timeAgo(t.created_at));
   });
 
@@ -713,7 +750,131 @@ const BADGE_STYLE = {
 function roleClass(role){
   if(role==='user') return 'role-user';
   if(role==='assistant') return 'role-assistant';
+  if(role==='agent') return 'role-agent';
   return 'role-tool';
+}
+
+function agentLogKey(threadId, agentId){ return `${threadId}:${agentId}`; }
+
+function upsertAgent(threadId, agent){
+  if(!threadId || !agent || !agent.agent_id) return;
+  const current = agentsByThread.get(threadId) || [];
+  const idx = current.findIndex(a => a.agent_id === agent.agent_id);
+  if(idx >= 0) current[idx] = {...current[idx], ...agent};
+  else current.push(agent);
+  agentsByThread.set(threadId, current);
+
+  projects.forEach(p => p.threads.forEach(t => {
+    if(t.id === threadId){
+      t.agents = current;
+      t.agent_count = current.length;
+      t.active_agent_count = current.filter(a => ['active','running'].includes(a.status)).length;
+    }
+  }));
+}
+
+function renderAgentMarkdown(event){
+  return `**${event.persona || event.agent_id}** [${event.event_type}]\n\n\`\`\`text\n${event.content || ''}\n\`\`\``;
+}
+
+function appendAgentEvent(event){
+  if(!event || !event.thread_id || !event.agent_id) return;
+  const key = agentLogKey(event.thread_id, event.agent_id);
+  const events = agentLogs.get(key) || [];
+  events.push(event);
+  agentLogs.set(key, events.slice(-250));
+
+  upsertAgent(event.thread_id, {
+    agent_id: event.agent_id,
+    persona: event.persona,
+    status: event.event_type === 'completed' ? 'completed' : event.event_type === 'error' ? 'failed' : 'active',
+    last_event: event.content,
+    last_event_type: event.event_type,
+  });
+
+  if(panelThreadId === event.thread_id){
+    renderAgentsPanel(event.thread_id);
+    appendAgentLogMessage(event);
+  }
+}
+
+function renderAgentsPanel(threadId){
+  const panel = document.getElementById('agents-panel');
+  const agents = agentsByThread.get(threadId) || [];
+  if(!agents.length){
+    panel.style.display = 'none';
+    panel.innerHTML = '';
+    return;
+  }
+  panel.style.display = 'flex';
+  panel.innerHTML = agents.map(a => {
+    const status = escHtml(a.status || 'active');
+    const dotClass = status === 'completed' ? 'completed' : status === 'failed' ? 'failed' : '';
+    return `
+      <div class="agent-row" data-agent-id="${escHtml(a.agent_id)}">
+        <div class="agent-dot ${dotClass}"></div>
+        <div>
+          <div class="agent-name">${escHtml(a.persona || a.agent_id)}</div>
+          <div class="agent-task">${escHtml(a.last_event || a.task || '')}</div>
+        </div>
+        <div class="agent-status">${status}</div>
+      </div>`;
+  }).join('');
+  panel.querySelectorAll('.agent-row').forEach(row => {
+    row.addEventListener('click', () => scrollToAgent(row.dataset.agentId));
+  });
+}
+
+function appendAgentLogMessage(event){
+  const container = document.getElementById('msgs');
+  if(!container || !event.content) return;
+  const wasEmpty = container.textContent.includes('No messages yet') || container.textContent.includes('Could not load messages');
+  if(wasEmpty) container.innerHTML = '';
+  renderMessages([{
+    role: 'agent',
+    content: renderAgentMarkdown(event),
+    timestamp: event.timestamp,
+    agent_id: event.agent_id,
+  }]);
+  container.scrollTop = container.scrollHeight;
+}
+
+function scrollToAgent(agentId){
+  const rows = [...document.querySelectorAll('.msg[data-agent-id]')];
+  const row = rows.reverse().find(el => el.dataset.agentId === agentId);
+  if(row) row.scrollIntoView({block:'nearest', behavior:'smooth'});
+}
+
+async function loadAgents(threadId){
+  try{
+    const res = await fetch(`${API}/api/threads/${threadId}/agents`);
+    const data = await res.json();
+    if(Array.isArray(data.agents)){
+      data.agents.forEach(agent => upsertAgent(threadId, agent));
+    }
+    const evRes = await fetch(`${API}/api/threads/${threadId}/agents/events`);
+    const evData = await evRes.json();
+    if(Array.isArray(evData.events)){
+      evData.events.forEach(event => {
+        const key = agentLogKey(event.thread_id, event.agent_id);
+        const current = agentLogs.get(key) || [];
+        current.push(event);
+        agentLogs.set(key, current.slice(-250));
+      });
+      if(evData.events.length){
+        const msgBox = document.getElementById('msgs');
+        if(msgBox.textContent.includes('No messages yet') || msgBox.textContent.includes('Could not load messages')) msgBox.innerHTML = '';
+        renderMessages(evData.events.slice(-80).map(event => ({
+          role: 'agent',
+          content: renderAgentMarkdown(event),
+          timestamp: event.timestamp,
+          agent_id: event.agent_id,
+        })));
+        msgBox.scrollTop = msgBox.scrollHeight;
+      }
+    }
+  }catch(e){}
+  renderAgentsPanel(threadId);
 }
 
 function renderMessages(msgs, prepend=false){
@@ -746,6 +907,7 @@ function renderMessages(msgs, prepend=false){
         <span class="msg-ts">${fmtTs(m.timestamp)}</span>
       </div>
       <div class="${bodyClass}">${md}</div>`;
+    if(m.agent_id) div.dataset.agentId = m.agent_id;
     frag.appendChild(div);
   });
   if(prepend && container.firstChild) container.insertBefore(frag, container.firstChild);
@@ -774,6 +936,8 @@ async function openPanel(threadId, threadData){
 
   const msgs = document.getElementById('msgs');
   msgs.innerHTML = '';
+  document.getElementById('agents-panel').innerHTML = '';
+  document.getElementById('agents-panel').style.display = 'none';
 
   if(threadId.startsWith('killed_')){
     msgs.innerHTML='<div style="padding:20px;color:rgba(239,120,120,0.6);font-size:11px">Archived threads — no live messages.</div>';
@@ -792,8 +956,10 @@ async function openPanel(threadId, threadData){
     } else {
       msgs.innerHTML='<div style="padding:20px;color:rgba(255,255,255,0.3);font-size:11px">No messages yet.</div>';
     }
+    await loadAgents(threadId);
   } catch(e){
     msgs.innerHTML='<div style="padding:20px;color:rgba(255,255,255,0.3);font-size:11px">Could not load messages.</div>';
+    await loadAgents(threadId);
   }
 
   document.getElementById('load-earlier').style.display = panelHasMore ? 'block' : 'none';
@@ -880,6 +1046,9 @@ function applyData(data){
 
   currentThreadId = data.current_thread_id || null;
   projects = incoming.map(p => ({...p, threads: p.threads||[]}));
+  projects.forEach(p => p.threads.forEach(t => {
+    if(Array.isArray(t.agents)) agentsByThread.set(t.id, t.agents);
+  }));
 
   // If focused on a project that no longer exists, go home
   if(viewMode === 'focused' && !projects.find(p => p.id === focusedProjectId)){
@@ -947,7 +1116,13 @@ function connectWs(){
   ws.onmessage=e=>{
     try{
       const d=JSON.parse(e.data);
-      if(d && d.projects && d.projects.length > 0) applyData(d);
+      if(d && d.type === 'agent_event') appendAgentEvent(d);
+      else if(d && d.type === 'agent_update') {
+        upsertAgent(d.thread_id, d.agent);
+        if(panelThreadId === d.thread_id) renderAgentsPanel(d.thread_id);
+        render();
+      }
+      else if(d && d.projects && d.projects.length > 0) applyData(d);
       else if(d && d.threads && d.threads.length > 0) applyData({projects:[{id:'default',name:'default',threads:d.threads}], current_thread_id: d.current_thread_id||null});
     }catch(err){ console.warn('ws parse error',err); }
   };

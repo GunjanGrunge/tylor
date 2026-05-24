@@ -718,8 +718,6 @@ def _run_afk_steps(
             }
 
         session["current_step"] = command
-        # Always re-read meta before writing to avoid clobbering concurrent flag updates
-        meta = _thread_meta(db, resolved_thread_id)
         meta["afk_session"] = session
         _write_thread_meta(db, resolved_thread_id, meta)
         result = execute_in_sandbox(
@@ -741,6 +739,23 @@ def _run_afk_steps(
             "last_command_output": outcome["stdout_summary"],
         })
         meta = _thread_meta(db, resolved_thread_id)
+        if _is_pause_requested(meta):
+            next_step = planned_steps[index] if index < len(planned_steps) else command
+            session.update({
+                "status": "paused",
+                "current_step": next_step,
+                "pause_requested": False,
+            })
+            meta["afk_session"] = session
+            _write_thread_meta(db, resolved_thread_id, meta)
+            return {
+                "status": "paused",
+                "thread_id": resolved_thread_id,
+                "current_step": next_step,
+                "steps_completed": session["steps_completed"],
+                "steps_total": session["steps_total"],
+                "message": _pause_message(next_step),
+            }
         meta["afk_session"] = session
         _write_thread_meta(db, resolved_thread_id, meta)
         _log_thread_event(

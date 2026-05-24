@@ -30,6 +30,7 @@ PORT_RANGE = (8765, 8775)  # try these ports in order
 # Shared across the process lifetime; safe because asyncio is single-threaded.
 ui_available: bool = False
 _seq: int = 0  # monotonic broadcast sequence counter
+_ui_loop: asyncio.AbstractEventLoop | None = None
 
 
 # ── WebSocket manager ────────────────────────────────────────────────────────
@@ -75,6 +76,13 @@ class WsManager:
 ws_manager = WsManager()
 
 
+def broadcast_from_any_thread(payload: dict) -> None:
+    """Best-effort WebSocket broadcast callable from sync MCP tools/threads."""
+    if _ui_loop is None or _ui_loop.is_closed():
+        return
+    asyncio.run_coroutine_threadsafe(ws_manager.broadcast(payload), _ui_loop)
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _flatten_content(raw) -> str:
@@ -115,6 +123,8 @@ def _fetch_threads() -> list[dict]:
                     last_message = _flatten_content(items[-1].get("Content", ""))[:80]
             except Exception:
                 pass
+            agents = _fetch_agents(thread_id) if thread_id else []
+            active_agents = [a for a in agents if a.get("status") in {"active", "running"}]
             threads.append({
                 "id":            thread_id,
                 "title":         t.get("name", ""),
@@ -123,6 +133,9 @@ def _fetch_threads() -> list[dict]:
                 "message_count": t.get("message_count", 0),
                 "project":       t.get("project", ""),
                 "last_message":  last_message,
+                "agent_count":   len(agents),
+                "active_agent_count": len(active_agents),
+                "agents":        agents,
             })
         return threads
     except Exception as exc:
@@ -185,6 +198,69 @@ def _fetch_current_thread_id() -> str | None:
         return None
 
 
+def _normalise_agent_state(item: dict, latest_event: dict | None = None) -> dict:
+    return {
+        "agent_id": item.get("AgentId", ""),
+        "persona": item.get("Persona", ""),
+        "status": str(item.get("Status", "unknown")).lower(),
+        "task": item.get("Task", ""),
+        "tools_loaded": item.get("ToolsLoaded", []),
+        "updated_at": item.get("UpdatedAt", item.get("CreatedAt", "")),
+        "last_event": _flatten_content((latest_event or {}).get("Content", ""))[:160],
+        "last_event_type": (latest_event or {}).get("EventType", ""),
+    }
+
+
+def _fetch_agents(thread_id: str) -> list[dict]:
+    """Fetch agent states and latest streamed events for a thread."""
+    try:
+        from .tools.tylor import _get_db
+        db = _get_db()
+        states = db.query_agent_states(thread_id) if hasattr(db, "query_agent_states") else []
+        events = db.query_agent_events(thread_id) if hasattr(db, "query_agent_events") else []
+        latest_by_agent: dict[str, dict] = {}
+        for event in events:
+            aid = event.get("AgentId")
+            if aid:
+                latest_by_agent[aid] = event
+        return [
+            _normalise_agent_state(state, latest_by_agent.get(state.get("AgentId", "")))
+            for state in states
+        ]
+    except Exception as exc:
+        logger.warning("ui_server: could not fetch agents for %s: %s", thread_id, exc)
+        return []
+
+
+def _fetch_agent_events(thread_id: str, agent_id: str | None = None, limit: int = 200) -> list[dict]:
+    """Fetch streamed verbose events for one thread or one agent."""
+    try:
+        from .tools.tylor import _get_db
+        db = _get_db()
+        if hasattr(db, "query_agent_events"):
+            items = db.query_agent_events(thread_id, agent_id)
+        else:
+            prefix = f"THREAD#{thread_id}#AGENT#"
+            if agent_id:
+                prefix += f"{agent_id}#EVENT#"
+            items = [i for i in db.query_all(prefix) if "#EVENT#" in i.get("SK", "")]
+            items.sort(key=lambda i: i.get("SK", ""))
+        return [
+            {
+                "thread_id": item.get("ThreadId", thread_id),
+                "agent_id": item.get("AgentId", ""),
+                "persona": item.get("Persona", ""),
+                "event_type": item.get("EventType", "chunk"),
+                "content": _flatten_content(item.get("Content", "")),
+                "timestamp": item.get("CreatedAt", item.get("UpdatedAt", "")),
+            }
+            for item in items[-limit:]
+        ]
+    except Exception as exc:
+        logger.warning("ui_server: could not fetch agent events for %s/%s: %s", thread_id, agent_id, exc)
+        return []
+
+
 async def thread_update_payload() -> dict:
     """Build the standard thread_update broadcast payload."""
     threads = _fetch_threads()
@@ -234,6 +310,25 @@ async def handle_thread_messages(request: web.Request) -> web.Response:
     return web.json_response(messages)
 
 
+async def handle_thread_agents(request: web.Request) -> web.Response:
+    thread_id = request.match_info["thread_id"]
+    if not _THREAD_ID_RE.match(thread_id):
+        return web.json_response({"error": "invalid thread_id"}, status=400)
+    loop = asyncio.get_running_loop()
+    agents = await loop.run_in_executor(None, _fetch_agents, thread_id)
+    return web.json_response({"agents": agents})
+
+
+async def handle_thread_agent_events(request: web.Request) -> web.Response:
+    thread_id = request.match_info["thread_id"]
+    agent_id = request.match_info.get("agent_id")
+    if not _THREAD_ID_RE.match(thread_id) or (agent_id and not _THREAD_ID_RE.match(agent_id)):
+        return web.json_response({"error": "invalid id"}, status=400)
+    loop = asyncio.get_running_loop()
+    events = await loop.run_in_executor(None, _fetch_agent_events, thread_id, agent_id, 200)
+    return web.json_response({"events": events})
+
+
 async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
     ws = web.WebSocketResponse(heartbeat=30)
     await ws.prepare(request)
@@ -244,7 +339,12 @@ async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
     # Send full thread state immediately on connect (seq=0 = initial snapshot)
     loop = asyncio.get_running_loop()
     threads_now = await loop.run_in_executor(None, _fetch_threads)
-    initial = {"type": "thread_update", "projects": _group_threads_by_project(threads_now), "seq": 0}
+    initial = {
+        "type": "thread_update",
+        "projects": _group_threads_by_project(threads_now),
+        "current_thread_id": _fetch_current_thread_id(),
+        "seq": 0,
+    }
     await ws.send_str(json.dumps(initial))
 
     try:
@@ -281,6 +381,9 @@ def _make_app() -> web.Application:
     app.router.add_get("/",                            handle_index)
     app.router.add_get("/api/threads",                 handle_threads)
     app.router.add_get("/api/threads/{thread_id}/messages", handle_thread_messages)
+    app.router.add_get("/api/threads/{thread_id}/agents", handle_thread_agents)
+    app.router.add_get("/api/threads/{thread_id}/agents/events", handle_thread_agent_events)
+    app.router.add_get("/api/threads/{thread_id}/agents/{agent_id}/events", handle_thread_agent_events)
     app.router.add_get("/ws/threads",                  handle_websocket)
 
     # Serve static assets from ui/ (dist/ when built, raw files in dev)
@@ -299,7 +402,8 @@ async def start_ui_server() -> web.AppRunner | None:
     Returns the AppRunner on success, None if all ports are unavailable.
     Sets module-level `ui_available` accordingly.
     """
-    global ui_available, PORT
+    global ui_available, PORT, _ui_loop
+    _ui_loop = asyncio.get_running_loop()
 
     app = _make_app()
     runner = web.AppRunner(app, access_log=None)

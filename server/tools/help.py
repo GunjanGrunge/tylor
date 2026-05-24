@@ -80,7 +80,11 @@ TIER1_TOOLS = [
     },
     {
         "name": "spawn_agent",
-        "description": "Spawn a persona-scoped sub-agent in a thread.",
+        "description": "Spawn a persona-scoped sub-agent in a thread with live verbose UI streaming.",
+    },
+    {
+        "name": "spawn_agents",
+        "description": "Spawn multiple persona-scoped agents in a thread for parallel work.",
     },
     {
         "name": "add_skill",

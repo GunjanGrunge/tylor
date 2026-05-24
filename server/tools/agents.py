@@ -1,6 +1,7 @@
 """server/tools/agents.py — Tier 1 agent orchestration MCP tools."""
 from __future__ import annotations
 import asyncio
+import threading
 import uuid
 import re
 
@@ -50,6 +51,100 @@ def _available_personas_message() -> str:
     return f"Available personas: {formatted}"
 
 
+def _ensure_agent_sdk_available() -> None:
+    try:
+        import claude_agent_sdk  # noqa: F401
+    except (ImportError, TypeError):
+        raise _invalid_params(
+            "Agent SDK not installed — run: pip install claude-agent-sdk"
+        )
+
+
+def _broadcast_agent_payload(payload: dict) -> None:
+    try:
+        import importlib
+
+        server_pkg = __package__.rsplit(".tools", 1)[0]
+        broadcast_from_any_thread = importlib.import_module(
+            f"{server_pkg}.ui_server"
+        ).broadcast_from_any_thread
+
+        broadcast_from_any_thread(payload)
+    except Exception:
+        pass
+
+
+def _record_agent_event(
+    db,
+    thread_id: str,
+    agent_id: str,
+    persona: str,
+    event_type: str,
+    content: str,
+) -> dict | None:
+    content = content or ""
+    event = None
+    try:
+        if hasattr(db, "put_agent_event"):
+            event = db.put_agent_event(
+                thread_id=thread_id,
+                agent_id=agent_id,
+                event_type=event_type,
+                content=content,
+                persona=persona,
+            )
+        else:
+            from .tylor import _now_iso
+
+            sk = f"THREAD#{thread_id}#AGENT#{agent_id}#EVENT#{_now_iso()}#{uuid.uuid4().hex}"
+            event = db.put_item(
+                sk,
+                {
+                    "ThreadId": thread_id,
+                    "AgentId": agent_id,
+                    "Persona": persona,
+                    "Type": "agent_event",
+                    "EventType": event_type,
+                    "Content": content,
+                },
+            )
+    except Exception:
+        event = None
+
+    _broadcast_agent_payload({
+        "type": "agent_event",
+        "thread_id": thread_id,
+        "agent_id": agent_id,
+        "persona": persona,
+        "event_type": event_type,
+        "content": content,
+        "timestamp": (event or {}).get("CreatedAt", (event or {}).get("UpdatedAt", "")),
+    })
+    return event
+
+
+def _write_agent_state(
+    db,
+    thread_id: str,
+    agent_id: str,
+    state: dict,
+) -> dict:
+    item = db.put_agent_state(thread_id=thread_id, agent_id=agent_id, state=state)
+    _broadcast_agent_payload({
+        "type": "agent_update",
+        "thread_id": thread_id,
+        "agent": {
+            "agent_id": agent_id,
+            "persona": state.get("Persona", ""),
+            "status": str(state.get("Status", "unknown")).lower(),
+            "task": state.get("Task", ""),
+            "tools_loaded": state.get("ToolsLoaded", []),
+            "updated_at": item.get("UpdatedAt", item.get("CreatedAt", "")),
+        },
+    })
+    return item
+
+
 @mcp.tool()
 def list_personas() -> dict:
     """
@@ -62,6 +157,7 @@ def _run_persona_agent(
     agent_id: str,
     thread_id: str,
     task: str,
+    persona: str,
     role_prompt: str,
     db,
 ) -> dict:
@@ -69,40 +165,52 @@ def _run_persona_agent(
     Drive the Agent SDK harness synchronously for a persona sub-agent.
     Collects streamed output, persists it, and updates agent state to completed.
     """
-    # Verify SDK is importable before doing any work
-    try:
-        import claude_agent_sdk  # noqa: F401
-    except (ImportError, TypeError):
-        raise _invalid_params(
-            "Agent SDK not installed — run: pip install claude-agent-sdk"
-        )
+    _ensure_agent_sdk_available()
 
     async def _collect():
         chunks: list[str] = []
+        _record_agent_event(db, thread_id, agent_id, persona, "started", f"{persona} started: {task}")
         async for chunk in run_with_agents(
             message=task,
             thread_id=thread_id,
             system_prompt=role_prompt,
         ):
             chunks.append(chunk)
+            _record_agent_event(db, thread_id, agent_id, persona, "chunk", chunk)
         return "".join(chunks)
 
-    # Check for a running event loop BEFORE creating any coroutine object so
-    # no coroutine is left unawaited if we fall through to the thread-pool path.
     try:
-        asyncio.get_running_loop()
-        _in_running_loop = True
-    except RuntimeError:
-        _in_running_loop = False
+        # Check for a running event loop BEFORE creating any coroutine object so
+        # no coroutine is left unawaited if we fall through to the thread-pool path.
+        try:
+            asyncio.get_running_loop()
+            _in_running_loop = True
+        except RuntimeError:
+            _in_running_loop = False
 
-    if not _in_running_loop:
-        output = asyncio.run(_collect())
-    else:
-        # Already inside a running event loop (e.g. tests or async callers):
-        # run in a dedicated thread with its own clean event loop.
-        import concurrent.futures
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            output = pool.submit(lambda: asyncio.run(_collect())).result()
+        if not _in_running_loop:
+            output = asyncio.run(_collect())
+        else:
+            # Already inside a running event loop (e.g. tests or async callers):
+            # run in a dedicated thread with its own clean event loop.
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                output = pool.submit(lambda: asyncio.run(_collect())).result()
+    except Exception as exc:
+        message = f"{persona} failed: {exc}"
+        _record_agent_event(db, thread_id, agent_id, persona, "error", message)
+        _write_agent_state(
+            db,
+            thread_id,
+            agent_id,
+            {
+                "Status": "failed",
+                "Persona": persona,
+                "Task": task,
+                "Error": str(exc),
+            },
+        )
+        return {"output_sk": None, "output": "", "error": str(exc)}
 
     # Persist output to thread
     try:
@@ -117,20 +225,23 @@ def _run_persona_agent(
         output_sk = None
 
     # Update agent state to completed
-    db.put_agent_state(
-        thread_id=thread_id,
-        agent_id=agent_id,
-        state={
+    _write_agent_state(
+        db,
+        thread_id,
+        agent_id,
+        {
             "Status": "completed",
+            "Persona": persona,
             "Task": task,
         },
     )
+    _record_agent_event(db, thread_id, agent_id, persona, "completed", f"{persona} completed.")
 
     return {"output_sk": output_sk, "output": output}
 
 
 @mcp.tool()
-def spawn_agent(persona: str, thread_id: str, task: str) -> dict:
+def spawn_agent(persona: str, thread_id: str, task: str, wait_for_completion: bool = False) -> dict:
     """
     Spawn a specialist sub-agent persona within the given thread and execute it.
     The sub-agent is scoped to this thread — no cross-thread bleed.
@@ -141,14 +252,6 @@ def spawn_agent(persona: str, thread_id: str, task: str) -> dict:
         thread_id: The thread to scope this agent to.
         task: The work the persona should perform inside this thread.
     """
-    # Validate SDK availability before writing any state
-    try:
-        import claude_agent_sdk  # noqa: F401
-    except (ImportError, TypeError):
-        raise _invalid_params(
-            "Agent SDK not installed — run: pip install claude-agent-sdk"
-        )
-
     if not _THREAD_ID_RE.match(thread_id):
         raise _invalid_params(
             f"Invalid thread_id '{thread_id}' — must be a 32-character hex UUID (e.g. uuid4().hex)"
@@ -158,15 +261,17 @@ def spawn_agent(persona: str, thread_id: str, task: str) -> dict:
         raise _invalid_params(
             f"Unknown persona: {persona}. {_available_personas_message()}"
         )
+    _ensure_agent_sdk_available()
 
     db = _get_db()
     _ensure_active_thread(db, thread_id)
 
     agent_id = f"agent_{uuid.uuid4().hex}"
-    state_item = db.put_agent_state(
-        thread_id=thread_id,
-        agent_id=agent_id,
-        state={
+    state_item = _write_agent_state(
+        db,
+        thread_id,
+        agent_id,
+        {
             "Status": "active",
             "Persona": definition.name,
             "Task": task,
@@ -174,24 +279,68 @@ def spawn_agent(persona: str, thread_id: str, task: str) -> dict:
         },
     )
 
-    execution = _run_persona_agent(
-        agent_id=agent_id,
-        thread_id=thread_id,
-        task=task,
-        role_prompt=definition.role_prompt,
-        db=db,
-    )
+    execution: dict = {"output_sk": None}
+    if wait_for_completion:
+        execution = _run_persona_agent(
+            agent_id=agent_id,
+            thread_id=thread_id,
+            task=task,
+            persona=definition.name,
+            role_prompt=definition.role_prompt,
+            db=db,
+        )
+    else:
+        worker = threading.Thread(
+            target=_run_persona_agent,
+            kwargs={
+                "agent_id": agent_id,
+                "thread_id": thread_id,
+                "task": task,
+                "persona": definition.name,
+                "role_prompt": definition.role_prompt,
+                "db": db,
+            },
+            name=f"agent101-{agent_id}",
+            daemon=True,
+        )
+        worker.start()
 
     return {
         "agent_id": agent_id,
         "persona": definition.name,
         "thread_id": thread_id,
         "tools_loaded": list(definition.ecc_tool_categories),
+        "role_prompt": definition.role_prompt,
         "task": task,
         "state_sk": state_item["SK"],
         "output_sk": execution.get("output_sk"),
-        "status": "completed",
+        "status": "completed" if wait_for_completion else "running",
+        "streaming": not wait_for_completion,
     }
+
+
+@mcp.tool()
+def spawn_agents(thread_id: str, agents: list[dict], wait_for_completion: bool = False) -> dict:
+    """
+    Spawn multiple persona agents for the same thread.
+
+    Each entry in agents must include:
+      {"persona": "analyst|ceo|cto|code_agent", "task": "..."}
+    """
+    if not agents:
+        raise _invalid_params("agents must contain at least one agent spec")
+
+    spawned = []
+    for spec in agents:
+        if not isinstance(spec, dict):
+            raise _invalid_params("Each agent spec must be an object")
+        spawned.append(spawn_agent(
+            persona=str(spec.get("persona", "")),
+            thread_id=thread_id,
+            task=str(spec.get("task", "")),
+            wait_for_completion=wait_for_completion,
+        ))
+    return {"thread_id": thread_id, "agents": spawned}
 
 
 def persist_agent_output(

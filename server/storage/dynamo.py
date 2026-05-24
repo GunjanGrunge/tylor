@@ -187,6 +187,29 @@ class DynamoClient:
             attributes["Task"] = task
         return self.put_item(sk=sk, attributes=attributes)
 
+    def put_agent_event(
+        self,
+        thread_id: str,
+        agent_id: str,
+        event_type: str,
+        content: str,
+        persona: str | None = None,
+    ) -> dict:
+        """Persist a streamed sub-agent event for live UI replay."""
+        self._validate_agent_id(agent_id)
+        sk = f"THREAD#{thread_id}#AGENT#{agent_id}#EVENT#{_unique_event_suffix()}"
+        self._assert_thread_isolation(thread_id, sk)
+        attributes = {
+            "ThreadId": thread_id,
+            "AgentId": agent_id,
+            "Type": "agent_event",
+            "EventType": event_type,
+            "Content": content,
+        }
+        if persona:
+            attributes["Persona"] = persona
+        return self.put_item(sk=sk, attributes=attributes)
+
     def put_agent_handoff(
         self,
         thread_id: str,
@@ -229,6 +252,16 @@ class DynamoClient:
         """Return persisted sub-agent state records for one thread only."""
         items = self.query_thread(thread_id, f"THREAD#{thread_id}#AGENT#")
         return [item for item in items if item.get("SK", "").endswith("#STATE")]
+
+    def query_agent_events(self, thread_id: str, agent_id: str | None = None) -> list:
+        """Return streamed sub-agent events for one thread, optionally one agent."""
+        prefix = f"THREAD#{thread_id}#AGENT#"
+        if agent_id:
+            self._validate_agent_id(agent_id)
+            prefix = f"{prefix}{agent_id}#EVENT#"
+        items = self.query_thread(thread_id, prefix)
+        events = [item for item in items if "#EVENT#" in item.get("SK", "")]
+        return sorted(events, key=lambda item: item.get("SK", ""))
 
     def get_thread_meta(self, thread_id: str) -> dict | None:
         """Return thread META item for the given thread_id."""

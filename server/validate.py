@@ -1,7 +1,7 @@
 """
-Story 1.2: AWS Connectivity & Credential Validation
+Story 1.2: Optional AWS Connectivity & Credential Validation
 Each check_*() returns (passed: bool, message: str).
-run_all() prints results and returns the count of failed AWS checks.
+run_all() prints results and returns the count of failed optional checks.
 """
 from __future__ import annotations
 
@@ -29,6 +29,13 @@ def _fail(msg: str) -> str:
 
 def _warn(msg: str) -> str:
     return f"  {YELLOW}⚠{NC}   {msg}"
+
+
+def _optional_aws_enabled() -> bool:
+    """Return True only when the user explicitly opts into AWS-backed features."""
+    return os.environ.get("AGENT101_ENABLE_AWS", "").lower() in {"1", "true", "yes"} or os.environ.get(
+        "TYLOR_ENABLE_AWS", ""
+    ).lower() in {"1", "true", "yes"}
 
 
 # ---------------------------------------------------------------------------
@@ -193,24 +200,31 @@ def _resolve_opensearch_host() -> tuple[str, str]:
 
 def run_all(plugin_dir: str = "") -> int:
     """
-    Run all service checks, print results, return count of failed AWS checks.
-    OpenSearch skips and platform key warnings do NOT increment the error count.
+    Run service checks, print results, return count of failed optional checks.
+    Local JSON mode is the default and requires no AWS/OpenSearch credentials.
     """
-    print(f"\n\033[1mValidating AWS connectivity\033[0m")
+    print(f"\n\033[1mValidating agent101 local-first setup\033[0m")
 
     aws_errors = 0
 
-    for check_fn in (check_dynamodb, check_s3, check_bedrock):
-        passed, message = check_fn()
+    if _optional_aws_enabled():
+        print(_warn("AWS mode enabled — validating optional DynamoDB/S3/Bedrock services"))
+        for check_fn in (check_dynamodb, check_s3, check_bedrock):
+            passed, message = check_fn()
+            print(message)
+            if not passed:
+                aws_errors += 1
+    else:
+        print(_ok("Local JSON storage mode — AWS validation skipped"))
+
+    host, port = _resolve_opensearch_host()
+    if host:
+        passed, message = check_opensearch(host, port)
         print(message)
         if not passed:
             aws_errors += 1
-
-    host, port = _resolve_opensearch_host()
-    passed, message = check_opensearch(host, port)
-    print(message)
-    if not passed:
-        aws_errors += 1
+    else:
+        print(_warn("OpenSearch not configured — semantic recall is disabled, thread storage still works"))
 
     # Platform key — non-fatal, never increments aws_errors
     _, message = check_platform_key(plugin_dir)
@@ -219,8 +233,8 @@ def run_all(plugin_dir: str = "") -> int:
     if aws_errors > 0:
         print(
             f"\n  {YELLOW}⚠{NC}   AWS validation: {aws_errors} service(s) unreachable. "
-            "Personal mode features require working AWS credentials.\n"
-            "     Fix credentials then re-run ./install.sh"
+            "Optional cloud features require working AWS/OpenSearch credentials.\n"
+            "     Local thread management continues to work without them."
         )
 
     return aws_errors
