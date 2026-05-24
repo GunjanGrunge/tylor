@@ -19,9 +19,15 @@
   --c-killed:  rgba(239,80,80,0.7);
   --c-project: rgba(255,255,255,0.9);
   --c-claude:  rgba(210,168,84,0.95);
+  --c-thread-silver: rgba(200,205,216,0.95);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);font-family:var(--font)}
+html,body{
+  width:100vw;height:100vh;overflow:hidden;
+  background:var(--bg);
+  background:radial-gradient(ellipse at 30% 50%, rgba(20,15,50,1) 0%, rgba(7,7,20,1) 70%);
+  font-family:var(--font);
+}
 
 /* ── Chrome ── */
 #chrome{
@@ -47,28 +53,49 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);font-fam
 #tc b{font-size:22px;font-weight:700;color:rgba(160,120,255,0.9);display:block;line-height:1;
   filter:drop-shadow(0 0 6px rgba(139,92,246,0.6))}
 
+/* ── Back button ── */
+#back-btn{
+  position:fixed;top:64px;left:20px;z-index:25;
+  display:none;align-items:center;gap:6px;
+  background:rgba(10,10,28,0.85);backdrop-filter:blur(12px);
+  border:1px solid rgba(139,92,246,0.3);border-radius:20px;
+  padding:6px 14px;font-size:10px;font-weight:600;
+  color:rgba(200,170,255,0.9);font-family:var(--font);
+  cursor:pointer;transition:all .2s;letter-spacing:.04em;
+}
+#back-btn:hover{background:rgba(139,92,246,0.15);border-color:rgba(139,92,246,0.5)}
+#back-btn.visible{display:flex}
+
 /* ── SVG canvas ── */
-#viz{position:fixed;top:54px;left:0;right:0;bottom:36px;z-index:1;background:transparent}
+#viz{position:fixed;top:54px;left:0;right:0;bottom:36px;z-index:1;background:transparent;overflow:hidden}
 
 /* ── Detail panel ── */
 #panel{
-  position:fixed;top:54px;right:0;bottom:36px;width:360px;z-index:15;
-  background:rgba(15,15,35,0.82);
+  position:fixed;top:54px;right:0;bottom:36px;width:420px;z-index:15;
+  background:rgba(15,15,35,0.92);
   backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
   border-left:1px solid rgba(139,92,246,0.3);
   display:flex;flex-direction:column;
-  transform:translateX(100%);
-  transition:transform 250ms ease-out;
+  opacity:0;
+  visibility:hidden;
   pointer-events:none;
+  transition:opacity 150ms ease, visibility 150ms ease;
 }
-#panel.open{transform:translateX(0);pointer-events:all}
+#panel.open{opacity:1;visibility:visible;pointer-events:all}
+
+/* Panel resize handle */
+#panel-resize{
+  position:absolute;left:-3px;top:0;bottom:0;width:6px;
+  cursor:col-resize;z-index:16;
+}
+#panel-resize:hover{background:rgba(139,92,246,0.2)}
 
 .ph{
   padding:18px 20px 14px;flex-shrink:0;
   border-bottom:1px solid rgba(139,92,246,0.12);
 }
 .ph-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px}
-.ph-title{font-size:14px;font-weight:700;color:rgba(255,255,255,0.95);line-height:1.3;flex:1}
+.ph-title{font-size:16px;font-weight:700;color:rgba(255,255,255,0.95);line-height:1.3;flex:1}
 .ph-close{
   background:none;border:none;color:rgba(255,255,255,0.35);
   font-family:var(--font);font-size:18px;cursor:pointer;line-height:1;
@@ -82,6 +109,8 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);font-fam
   letter-spacing:.1em;text-transform:uppercase;border:1px solid;
 }
 .ph-ts{font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:.03em}
+.ph-project{font-size:10px;color:rgba(255,255,255,0.25);margin-left:4px}
+.ph-msg-count{font-size:10px;color:rgba(255,255,255,0.3)}
 
 /* Load earlier button */
 #load-earlier{
@@ -97,18 +126,36 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);font-fam
 /* Messages list */
 #msgs{
   flex:1;overflow-y:auto;padding:12px 20px 16px;
-  display:flex;flex-direction:column;gap:10px;
+  display:flex;flex-direction:column;gap:12px;
   scrollbar-width:thin;scrollbar-color:rgba(139,92,246,0.2) transparent;
+  position:relative;
 }
 #msgs::-webkit-scrollbar{width:3px}
 #msgs::-webkit-scrollbar-thumb{background:rgba(139,92,246,0.22);border-radius:2px}
 
+/* Jump to latest */
+#jump-latest{
+  position:absolute;bottom:12px;right:20px;z-index:5;
+  background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.4);
+  border-radius:16px;padding:5px 12px;font-size:9px;font-weight:600;
+  color:rgba(200,170,255,0.9);font-family:var(--font);
+  cursor:pointer;display:none;transition:opacity .15s;
+}
+#jump-latest:hover{background:rgba(139,92,246,0.25)}
+
 /* Message items */
-.msg{display:flex;flex-direction:column;gap:4px;opacity:1;transition:opacity .2s}
+.msg{
+  display:flex;flex-direction:column;gap:4px;
+  background:rgba(255,255,255,0.02);
+  border:1px solid rgba(255,255,255,0.04);
+  border-radius:8px;padding:10px 12px;
+  transition:border-color .2s;
+}
+.msg:hover{border-color:rgba(139,92,246,0.15)}
 .msg-head{display:flex;align-items:center;gap:7px}
 .role-chip{
   font-size:8.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-  padding:1px 7px;border-radius:8px;
+  padding:2px 8px;border-radius:8px;
 }
 .role-user{background:rgba(0,255,179,0.1);color:rgba(0,255,179,0.85);border:1px solid rgba(0,255,179,0.25)}
 .role-assistant{background:rgba(139,92,246,0.1);color:rgba(180,140,255,0.85);border:1px solid rgba(139,92,246,0.25)}
@@ -125,22 +172,10 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);font-fam
   background:rgba(139,92,246,0.1);padding:1px 5px;border-radius:3px}
 .msg-body pre{background:rgba(0,0,0,0.3);border-radius:6px;padding:8px;
   overflow-x:auto;margin:4px 0}
-.msg-sep{height:1px;background:rgba(139,92,246,0.07);flex-shrink:0}
-
-/* Content cross-fade */
-#msgs.fading{opacity:0;transition:opacity 100ms}
-#msgs.fading-in{opacity:1;transition:opacity 150ms}
 
 /* Responsive: full-width below 900px */
 @media(max-width:900px){
   #panel{width:100%;border-left:none;border-top:1px solid rgba(139,92,246,0.3)}
-}
-
-/* ── Node labels ── */
-.node-label{
-  font-family:var(--font);
-  pointer-events:none;
-  dominant-baseline:middle;
 }
 
 /* ── Tooltip ── */
@@ -161,29 +196,109 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);font-fam
   display:flex;align-items:center;gap:5px;
   font-size:9.5px;font-family:var(--font);color:rgba(255,255,255,0.3);
 }
-.hdot{width:6px;height:6px;border-radius:50%;animation:hb 2.8s ease-in-out infinite}
-@keyframes hb{0%,100%{opacity:.5}50%{opacity:1}}
-@keyframes ring-pulse{0%{transform:translate(-50%,-50%) scale(1);opacity:.45}100%{transform:translate(-50%,-50%) scale(1.8);opacity:0}}
+.hdot{width:6px;height:6px;border-radius:50%}
 .hdot.ok{background:var(--c-active);box-shadow:0 0 6px rgba(0,255,179,0.5)}
 .hdot.warn{background:var(--c-await)}
-.hdot.err{background:rgba(239,68,68,0.9);animation:none}
+.hdot.err{background:rgba(239,68,68,0.9)}
 
-/* ── Project switcher ── */
-#switcher{
-  position:fixed;bottom:8px;left:50%;transform:translateX(-50%);z-index:20;
-  display:flex;gap:6px;
-  background:rgba(10,10,28,0.85);backdrop-filter:blur(12px);
-  border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:4px 6px;
+/* ── Node card styles (rendered in foreignObject) ── */
+.thread-card{
+  width:210px;height:68px;
+  background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  backdrop-filter:blur(8px);
+  border-radius:10px;
+  padding:8px 12px;
+  display:flex;flex-direction:column;justify-content:space-between;
+  cursor:pointer;
+  transition:transform 260ms, box-shadow 360ms, border-color 260ms;
+  overflow:hidden;
+  border:1px solid rgba(200,205,216,0.12);
+  box-shadow:0 6px 18px rgba(200,205,216,0.03), inset 0 1px 0 rgba(255,255,255,0.02);
+  transform-origin:center;
 }
-.sp{
-  padding:4px 12px;border-radius:14px;font-size:9.5px;font-weight:600;
-  letter-spacing:.08em;text-transform:uppercase;cursor:pointer;
-  border:1px solid transparent;color:rgba(255,255,255,0.4);background:transparent;
-  font-family:var(--font);transition:all .2s;
+.thread-card:hover{transform:scale(1.02)}
+.thread-card.status-active{border:1.5px solid rgba(200,210,230,0.7);box-shadow:0 0 10px rgba(200,210,230,0.35), 0 0 24px rgba(200,210,230,0.15)}
+.thread-card.status-awaiting{border:1.5px solid rgba(200,210,230,0.7);box-shadow:0 0 10px rgba(200,210,230,0.35), 0 0 24px rgba(200,210,230,0.15)}
+.thread-card.status-running{border:1.5px solid rgba(200,210,230,0.7);box-shadow:0 0 10px rgba(200,210,230,0.35), 0 0 24px rgba(200,210,230,0.15)}
+.thread-card.status-idle{border:1.5px solid rgba(200,210,230,0.5);box-shadow:0 0 8px rgba(200,210,230,0.2), 0 0 18px rgba(200,210,230,0.08)}
+.thread-card.status-killed{border:1.5px solid rgba(200,210,230,0.35);box-shadow:0 0 6px rgba(200,210,230,0.1)}
+.thread-card.current{border-width:2.5px;border-color:rgba(220,225,240,0.9);box-shadow:0 0 16px rgba(220,225,240,0.5), 0 0 36px rgba(220,225,240,0.2), inset 0 0 8px rgba(220,225,240,0.05)}
+.tc-header{display:flex;align-items:center;gap:6px}
+.tc-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.tc-name{font-size:11.5px;font-weight:600;color:rgba(255,255,255,0.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.tc-preview{font-size:9.5px;color:rgba(255,255,255,0.4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-style:italic}
+.tc-footer{display:flex;align-items:center;justify-content:space-between}
+.tc-msgs{font-size:8.5px;color:rgba(255,255,255,0.3)}
+.tc-time{font-size:8.5px;color:rgba(255,255,255,0.3)}
+
+.project-card{
+  width:220px;height:56px;
+  background:rgba(12,12,30,0.85);
+  backdrop-filter:blur(8px);
+  border-radius:12px;
+  padding:10px 14px;
+  display:flex;flex-direction:column;justify-content:center;
+  cursor:pointer;
+  transition:border-color 300ms, box-shadow 300ms, transform 200ms;
+  overflow:hidden;
 }
-.sp:hover{color:rgba(255,255,255,0.7);border-color:rgba(255,255,255,0.15)}
-.sp.on{background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.28);color:rgba(255,255,255,0.92)}
-.sp-dot{display:inline-block;width:5px;height:5px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.project-card:hover{transform:scale(1.03)}
+.pc-header{display:flex;align-items:center;gap:8px}
+.pc-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.pc-name{font-size:12px;font-weight:700;color:rgba(255,255,255,0.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-info{font-size:9px;color:rgba(255,255,255,0.45);margin-top:3px;padding-left:18px}
+
+.killed-card{
+  width:160px;height:36px;
+  background:rgba(30,6,6,0.8);
+  border:1px dashed rgba(239,80,80,0.4);
+  border-radius:8px;
+  padding:4px 10px;
+  display:flex;align-items:center;gap:6px;
+  cursor:pointer;
+  font-size:9.5px;color:rgba(255,140,140,0.8);font-weight:600;
+}
+
+/* ── Animations (event-driven only) ── */
+@keyframes fadeSlideIn{
+  from{opacity:0;transform:translateY(8px)}
+  to{opacity:1;transform:translateY(0)}
+}
+@keyframes fadeOut{
+  from{opacity:1}
+  to{opacity:0;transform:scale(0.95)}
+}
+.node-enter{animation:fadeSlideIn 300ms ease forwards}
+.node-exit{animation:fadeOut 300ms ease forwards}
+
+/* Thread card floating + pulse */
+@keyframes threadFloat{
+  0%{transform:translateY(0)}
+  50%{transform:translateY(-4px)}
+  100%{transform:translateY(0)}
+}
+@keyframes threadPulse{
+  0%{box-shadow:0 6px 18px rgba(200,205,216,0.03)}
+  50%{box-shadow:0 10px 28px rgba(200,205,216,0.06)}
+  100%{box-shadow:0 6px 18px rgba(200,205,216,0.03)}
+}
+.thread-card{animation:threadFloat 6s ease-in-out infinite, threadPulse 3.5s ease-in-out infinite}
+
+/* Animated silver connectors (links with moving dash + glow pulse) */
+.silver-connector{
+  stroke:rgba(200,210,230,0.85);
+  stroke-width:1.8;
+  stroke-linecap:round;
+  fill:none;
+  stroke-dasharray:8 12;
+  animation:dashMove 3s linear infinite, connGlow 2.8s ease-in-out infinite;
+}
+
+@keyframes dashMove{from{stroke-dashoffset:0}to{stroke-dashoffset:-20}}
+@keyframes connGlow{0%{opacity:0.65}50%{opacity:1}100%{opacity:0.75}}
+</style>
+</head>
+<body>
 </style>
 </head>
 <body>
@@ -203,8 +318,11 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);font-fam
   </div>
 </div>
 
+<!-- Back button (focused view) -->
+<button id="back-btn" onclick="goHome()">← Overview</button>
+
 <!-- Main SVG -->
-<svg id="viz" style="background:transparent"></svg>
+<svg id="viz"></svg>
 
 <!-- Tooltip -->
 <div id="tip">
@@ -216,6 +334,7 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);font-fam
 
 <!-- Detail panel -->
 <div id="panel">
+  <div id="panel-resize"></div>
   <div class="ph">
     <div class="ph-top">
       <div class="ph-title" id="panel-title">Thread</div>
@@ -223,23 +342,24 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);font-fam
     </div>
     <div class="ph-meta">
       <span class="ph-badge" id="panel-badge"></span>
+      <span class="ph-msg-count" id="panel-msg-count"></span>
       <span class="ph-ts" id="panel-ts"></span>
+      <span class="ph-project" id="panel-project"></span>
     </div>
   </div>
   <button id="load-earlier" onclick="loadEarlier()">↑ Load earlier messages</button>
   <div id="msgs"></div>
+  <button id="jump-latest" onclick="jumpToLatest()">↓ Latest</button>
 </div>
-
-<!-- Project switcher -->
-<div id="switcher"></div>
 
 <!-- Health -->
 <div id="health"><div class="hdot ok" id="hdot"></div><span id="hmsg">connected</span></div>
 
 <script>
 // ── Constants ─────────────────────────────────
-const API = 'http://localhost:8765';
-const WS  = 'ws://localhost:8765/ws/threads';
+// Use the UI server port (8767) to match the running server.
+const API = 'http://localhost:8767';
+const WS  = 'ws://localhost:8767/ws/threads';
 
 const STATUS_COLOR = {
   active:   '#00ffb3',
@@ -248,625 +368,333 @@ const STATUS_COLOR = {
   idle:     'rgba(200,210,255,0.55)',
   killed:   'rgba(239,80,80,0.75)',
 };
-const STATUS_GLOW = {
-  active:   '0 0 14px rgba(0,255,179,0.5), 0 0 28px rgba(0,255,179,0.2)',
-  awaiting: '0 0 12px rgba(251,191,36,0.45)',
-  running:  '0 0 10px rgba(167,139,250,0.35)',
-  idle:     'none',
-  killed:   '0 0 10px rgba(239,80,80,0.3)',
-};
 
-// ── Per-thread unique color ────────────────────
-// 12 visually distinct hues spread around the wheel, all vivid enough
-// to read on the dark background.
-const THREAD_HUES = [195,155,270,30,340,90,220,60,310,120,0,240];
-function threadColor(id, alpha=1){
-  // Simple djb2-style hash on the thread id string
-  let h = 5381;
-  for(let i=0;i<id.length;i++) h = ((h<<5)+h) ^ id.charCodeAt(i);
-  const hue = THREAD_HUES[Math.abs(h) % THREAD_HUES.length];
-  return alpha<1
-    ? `hsla(${hue},85%,65%,${alpha})`
-    : `hsl(${hue},85%,65%)`;
-}
-
-// ── Persistent node positions (survive refresh) ────────────────────
-const POS_KEY = 'tylor_node_positions';
-function loadPositions(){ try{ return JSON.parse(localStorage.getItem(POS_KEY)||'{}'); }catch{ return {}; } }
-function savePosition(id, fx, fy){ const p=loadPositions(); p[id]={fx,fy}; localStorage.setItem(POS_KEY,JSON.stringify(p)); }
-function clearPosition(id){ const p=loadPositions(); delete p[id]; localStorage.setItem(POS_KEY,JSON.stringify(p)); }
+const PROJECT_COLORS = ['#64b4ff','#b4ff8c','#ffb464','#ff8cdc'];
 
 // ── SVG setup ─────────────────────────────────
 const svgEl = document.getElementById('viz');
-const W = window.innerWidth, H = window.innerHeight - 54 - 36;
+let W = window.innerWidth, H = window.innerHeight - 54 - 36;
 svgEl.setAttribute('width', W);
 svgEl.setAttribute('height', H);
-svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
 
 const svg = d3.select('#viz');
 
-// Defs: gradients, filters
 const defs = svg.append('defs');
-
-// Glow filter for links
 const glowF = defs.append('filter').attr('id','link-glow').attr('x','-50%').attr('y','-50%').attr('width','200%').attr('height','200%');
-glowF.append('feGaussianBlur').attr('stdDeviation','2').attr('result','b');
+glowF.append('feGaussianBlur').attr('stdDeviation','2.5').attr('result','b');
 const fm = glowF.append('feMerge');
 fm.append('feMergeNode').attr('in','b');
 fm.append('feMergeNode').attr('in','SourceGraphic');
 
-// Node glow filter
-const nodeF = defs.append('filter').attr('id','node-glow').attr('x','-80%').attr('y','-80%').attr('width','360%').attr('height','360%');
-nodeF.append('feGaussianBlur').attr('stdDeviation','4').attr('result','b');
-const fm2 = nodeF.append('feMerge');
-fm2.append('feMergeNode').attr('in','b');
-fm2.append('feMergeNode').attr('in','SourceGraphic');
+const rootG = svg.append('g').attr('class','root-transform');
+const linkG = rootG.append('g').attr('class','links');
+const nodeG = rootG.append('g').attr('class','nodes');
 
-// Layer order: links first, then nodes
-const linkG  = svg.append('g').attr('class','links');
-const nodeG  = svg.append('g').attr('class','nodes');
-const labelG = svg.append('g').attr('class','labels');
-
-// ── Sparkle background ────────────────────────
-const bgCanvas = document.createElement('canvas');
-bgCanvas.style.cssText = 'position:fixed;top:54px;left:0;z-index:0;pointer-events:none';
-bgCanvas.width = W; bgCanvas.height = H;
-document.body.insertBefore(bgCanvas, document.getElementById('viz'));
-const bgCtx = bgCanvas.getContext('2d');
-const STARS = Array.from({length:90},()=>({
-  x:Math.random()*W, y:Math.random()*H,
-  vx:(Math.random()-.5)*.18, vy:(Math.random()-.5)*.18,
-  r:Math.random()*1.2+.3, ph:Math.random()*Math.PI*2
-}));
-function drawBg(now=0){
-  bgCtx.clearRect(0,0,W,H);
-  STARS.forEach(s=>{
-    s.x+=s.vx; s.y+=s.vy; s.ph+=.008;
-    if(s.x<0||s.x>W) s.vx*=-1;
-    if(s.y<0||s.y>H) s.vy*=-1;
-  });
-  for(let i=0;i<STARS.length;i++) for(let j=i+1;j<STARS.length;j++){
-    const dx=STARS[i].x-STARS[j].x, dy=STARS[i].y-STARS[j].y, d=Math.sqrt(dx*dx+dy*dy);
-    if(d<100){
-      bgCtx.beginPath();bgCtx.moveTo(STARS[i].x,STARS[i].y);bgCtx.lineTo(STARS[j].x,STARS[j].y);
-      bgCtx.strokeStyle=`rgba(80,50,180,${.12*(1-d/100)})`;bgCtx.lineWidth=.5;bgCtx.stroke();
-    }
-  }
-  STARS.forEach(s=>{
-    const tw=(Math.sin(s.ph)+1)*.5;
-    bgCtx.beginPath();bgCtx.arc(s.x,s.y,s.r*(0.6+tw*.8),0,Math.PI*2);
-    bgCtx.fillStyle=`rgba(140,90,240,${0.28+tw*.45})`;bgCtx.fill();
-  });
-  requestAnimationFrame(drawBg);
-}
-drawBg();
+// Zoom/pan behavior
+const zoom = d3.zoom()
+  .scaleExtent([0.2, 3])
+  .on('zoom', e => rootG.attr('transform', e.transform));
+svg.call(zoom);
 
 // ── State ─────────────────────────────────────
 let projects = [];
-let activeProjectId = null;
-let currentThreadId = null;   // the thread currently active in Claude
-let simulation = null;
-let graphNodes = [];  // D3 nodes: [{id, type:'claude'|'project'|'thread', ...}]
-let graphLinks = [];  // D3 links: [{source, target, type}]
+let currentThreadId = null;
+let viewMode = 'home'; // 'home' or 'focused'
+let focusedProjectId = null;
 
-const PROJECT_COLORS = ['#64b4ff','#b4ff8c','#ffb464'];
+// ── Time formatting ───────────────────────────
+function timeAgo(ts){
+  if(!ts) return '';
+  const t = new Date(ts).getTime();
+  if(isNaN(t)) return '';
+  const diff = Date.now() - t;
+  const mins = Math.floor(diff/60000);
+  if(mins < 1) return 'now';
+  if(mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins/60);
+  if(hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs/24);
+  return `${days}d ago`;
+}
 
-// ── Claude logo node ──────────────────────────
-function drawClaudeNode(cx, cy){
-  // Draw via canvas on the bg — just use the SVG center node
-  const g = nodeG.append('g').attr('class','claude-node').attr('transform',`translate(${cx},${cy})`);
-  // Outer glow rings
-  [80,60,44].forEach((r,i)=>{
-    g.append('circle').attr('r',r)
-      .attr('fill','none')
-      .attr('stroke',`rgba(255,255,255,${[0.04,0.07,0.12][i]})`)
-      .attr('stroke-width',1)
-      .style('animation',`ring-pulse ${3+i*.8}s ease-out infinite ${i*.5}s`);
-  });
-  // Disc
-  g.append('circle').attr('r',38)
+function fmtTs(ts){
+  if(!ts) return '';
+  try { return new Date(ts).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); }
+  catch { return typeof ts === 'string' ? ts.slice(0,16).replace('T',' ') : ''; }
+}
+
+function escHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ══════════════════════════════════════════════
+// HOME VIEW: Claude → Project cards (overview)
+// ══════════════════════════════════════════════
+function renderHome(){
+  linkG.selectAll('*').remove();
+  nodeG.selectAll('*').remove();
+  if(!projects.length) return;
+
+  // Layout: Claude on the left, projects fanned vertically on the right
+  const claudeX = 200;
+  const claudeY = 300;
+  const projX = 600;
+  const projSpacing = 130;
+  const projStartY = claudeY - ((projects.length - 1) * projSpacing) / 2;
+
+  // Draw Claude node
+  const cg = nodeG.append('g').attr('class','claude-node')
+    .attr('transform', `translate(${claudeX},${claudeY})`);
+  cg.append('circle').attr('r',44)
     .attr('fill','rgba(10,10,28,0.95)')
-    .attr('stroke','rgba(255,255,255,0.35)')
-    .attr('stroke-width',1.5)
-    .style('filter','drop-shadow(0 0 20px rgba(255,255,255,0.3)) drop-shadow(0 0 40px rgba(255,255,255,0.12))');
-  // Logo (canvas-drawn amber)
-  const fo = g.append('foreignObject').attr('x',-22).attr('y',-22).attr('width',44).attr('height',44);
-  const c = fo.append('xhtml:canvas').attr('width',44).attr('height',44)
-    .style('display','block').node();
+    .attr('stroke','rgba(200,210,230,0.6)')
+    .attr('stroke-width',2)
+    .style('filter','drop-shadow(0 0 18px rgba(200,210,230,0.4)) drop-shadow(0 0 36px rgba(200,210,230,0.15))');
+  [66,54].forEach((r,i) => {
+    cg.append('circle').attr('r',r)
+      .attr('fill','none')
+      .attr('stroke',`rgba(255,255,255,${[0.04,0.07][i]})`)
+      .attr('stroke-width',1);
+  });
+  const fo = cg.append('foreignObject').attr('x',-24).attr('y',-24).attr('width',48).attr('height',48);
+  const c = fo.append('xhtml:canvas').attr('width',48).attr('height',48).style('display','block').node();
   const lc = c.getContext('2d');
   const img = new Image();
-  img.onload = ()=>{lc.drawImage(img,0,0,44,44);lc.globalCompositeOperation='source-atop';lc.fillStyle='rgba(255,255,255,0.95)';lc.fillRect(0,0,44,44);lc.globalCompositeOperation='source-over'};
-  img.onerror = ()=>{lc.font='bold 28px serif';lc.fillStyle='rgba(255,255,255,0.9)';lc.textAlign='center';lc.textBaseline='middle';lc.fillText('✦',22,22)};
+  img.onload = () => {lc.drawImage(img,0,0,48,48);lc.globalCompositeOperation='source-atop';lc.fillStyle='rgba(255,255,255,0.95)';lc.fillRect(0,0,48,48)};
+  img.onerror = () => {lc.font='bold 30px serif';lc.fillStyle='rgba(255,255,255,0.9)';lc.textAlign='center';lc.textBaseline='middle';lc.fillText('✦',24,24)};
   img.src='claude-logo.png';
-  return g;
-}
 
-// ── Build graph from projects ─────────────────
-// Pre-seeds node positions so simulation starts clean, not from random chaos.
-function buildGraph(){
-  graphNodes = [{ id:'__claude__', type:'claude', label:'Claude', fx: W/2, fy: H/2 }];
-  graphLinks = [];
+  // Draw project cards + links
+  projects.forEach((proj, i) => {
+    const py = projStartY + i * projSpacing;
+    const col = PROJECT_COLORS[i % PROJECT_COLORS.length];
+    const alive = proj.threads.filter(t => t.status !== 'killed');
+    const activeCount = alive.filter(t => t.status === 'active').length;
+    const runningCount = alive.filter(t => t.status === 'running').length;
 
-  const np = Math.min(projects.length, 3);
-  // Hub angles: evenly spread around Claude (120° apart for 3 projects)
-  const hubAngles = np === 1 ? [0]
-    : np === 2 ? [-Math.PI/2, Math.PI/2]
-    : [-Math.PI/2, Math.PI/6, Math.PI*5/6];
-
-  projects.forEach((proj, pi)=>{
-    const projId  = `proj_${proj.id}`;
-    const hAngle  = hubAngles[pi] || (pi * 2*Math.PI/np);
-    const hubDist = Math.min(W, H) * 0.30;
-
-    // Pre-seed hub position
-    const hx = W/2 + hubDist * Math.cos(hAngle);
-    const hy = H/2 + hubDist * Math.sin(hAngle);
-
-    graphNodes.push({ id:projId, type:'project', label:proj.name,
-      projectIdx:pi, projectId:proj.id, x:hx, y:hy });
-    graphLinks.push({ source:'__claude__', target:projId, type:'hub' });
-
-    const alive = proj.threads.filter(t=>t.status!=='killed');
-    const killed = proj.threads.filter(t=>t.status==='killed');
-    const threadDist = Math.min(W, H) * 0.18;
-    const totalThreads = alive.length + (killed.length ? 1 : 0);
-
-    const savedPos = loadPositions();
-    alive.forEach((t, ti)=>{
-      // Fan threads around the hub, evenly spread in a 200° arc
-      const arc = Math.min(Math.PI * 1.1, totalThreads * 0.35);
-      const tAngle = hAngle + (arc/2) - (totalThreads > 1 ? (arc * ti/(totalThreads-1)) : 0);
-      const nodeId = `thr_${t.id}`;
-      const saved = savedPos[nodeId];
-      graphNodes.push({
-        id: nodeId, type:'thread', label:t.title,
-        status:t.status, thread:t, projectIdx:pi, projectId:proj.id,
-        x: saved ? saved.fx : hx + threadDist * Math.cos(tAngle),
-        y: saved ? saved.fy : hy + threadDist * Math.sin(tAngle),
-        fx: saved ? saved.fx : null,   // lock to saved position if user placed it
-        fy: saved ? saved.fy : null,
-      });
-      graphLinks.push({ source:projId, target:nodeId, type:'thread' });
+    // Connection line (bezier)
+    const linkPath = d3.linkHorizontal()({
+      source: [claudeX + 44, claudeY],
+      target: [projX - 110, py]
     });
+    // base colored connection
+    linkG.append('path')
+      .attr('d', linkPath)
+      .attr('fill', 'none')
+      .attr('stroke', col)
+      .attr('stroke-width', 2.5)
+      .attr('opacity', 0.5)
+      .attr('filter', 'url(#link-glow)');
+    // animated silver overlay on home connectors
+    linkG.append('path')
+      .attr('d', linkPath)
+      .attr('class', 'silver-connector')
+      .attr('opacity', 0.9);
+    // (no overlay) keep base colored connection only
 
-    if(killed.length){
-      const kId = `killed_${proj.id}`;
-      // Position killed group opposite the hub from Claude
-      const kAngle = hAngle + Math.PI * 0.6;
-      graphNodes.push({
-        id:kId, type:'killed-group', label:`✕ ${killed.length} killed`,
-        killed, projectIdx:pi, projectId:proj.id,
-        x: hx + threadDist * Math.cos(kAngle),
-        y: hy + threadDist * Math.sin(kAngle),
-      });
-      graphLinks.push({ source:projId, target:kId, type:'killed' });
-    }
+    // Project card — oversized foreignObject for glow
+    const pg = nodeG.append('g').attr('class','node project-node')
+      .attr('transform', `translate(${projX},${py})`);
+
+    const pfo = pg.append('foreignObject')
+      .attr('x', -130).attr('y', -44).attr('width', 260).attr('height', 88)
+      .style('overflow','visible');
+    const pwrap = pfo.append('xhtml:div')
+      .style('width','100%').style('height','100%')
+      .style('display','flex').style('align-items','center').style('justify-content','center');
+    const div = pwrap.append('xhtml:div').attr('class','project-card')
+      .style('border', `1.5px solid ${col}`)
+      .style('border-left', `4px solid ${col}`)
+      .style('box-shadow', `0 0 14px ${col}55, 0 0 28px ${col}22`)
+      .on('click', () => focusProject(proj.id));
+
+    div.append('xhtml:div').attr('class','pc-header')
+      .html(`<div class="pc-dot" style="background:${col};box-shadow:0 0 6px ${col}"></div><div class="pc-name">${escHtml(proj.name)}</div>`);
+
+    let info = `${alive.length} threads`;
+    if(activeCount) info += ` · ${activeCount} active`;
+    if(runningCount) info += ` · ${runningCount} running`;
+    div.append('xhtml:div').attr('class','pc-info').text(info);
   });
+
+  // Update counter (total)
+  const total = projects.reduce((s,p) => s + p.threads.filter(t=>t.status!=='killed').length, 0);
+  document.getElementById('tc-n').textContent = total;
+  document.getElementById('tc-l').textContent = total===1?'thread':'threads';
 }
 
-// ── Render ────────────────────────────────────
-function render(){
-  buildGraph();
-
-  const activeIdx = projects.findIndex(p=>p.id===activeProjectId);
-
-  // ── Simulation ──
-  if(simulation) simulation.stop();
-
-  // Scale link distances based on total node count — more nodes need more room
-  const threadCount = graphNodes.filter(n=>n.type==='thread').length;
-  const distScale = Math.max(1, Math.min(1.6, 1 + threadCount * 0.025));
-
-  simulation = d3.forceSimulation(graphNodes)
-    .force('link', d3.forceLink(graphLinks).id(d=>d.id)
-      .distance(d=>{
-        if(d.type==='hub')    return 200 * distScale;
-        if(d.type==='killed') return 150 * distScale;
-        return 140 * distScale;
-      })
-      .strength(0.75))
-    .force('charge', d3.forceManyBody()
-      .strength(d=>{
-        if(d.type==='claude') return -1200;
-        if(d.type==='project') return -500;
-        return -280;
-      }))
-    .force('collide', d3.forceCollide()
-      .radius(d=>{
-        if(d.type==='claude') return 90;   // hard exclusion zone around Claude
-        if(d.type==='project') return 80;
-        const sf = Math.max(0.7, 1 - threadCount * 0.012);
-        return Math.round(62 * sf);
-      }).strength(1.0).iterations(4))
-    .force('center', d3.forceCenter(W/2, H/2).strength(0.03))
-    .force('bounds', ()=>{
-      const cx = W/2, cy = H/2;
-      graphNodes.forEach(n=>{
-        if(n.type==='claude') return;
-        const r = n.type==='project' ? 70 : 56;
-        // Keep within viewport
-        n.x = Math.max(r+8, Math.min(W-r-8, n.x||W/2));
-        n.y = Math.max(r+8, Math.min(H-r-8, n.y||H/2));
-        // Push away from Claude center — minimum 120px clearance
-        const dx = n.x - cx, dy = n.y - cy;
-        const dist = Math.sqrt(dx*dx + dy*dy)||1;
-        const minDist = 120;
-        if(dist < minDist){
-          const scale = minDist / dist;
-          n.x = cx + dx * scale;
-          n.y = cy + dy * scale;
-        }
-      });
-    })
-    .alphaDecay(0.04)    // settle faster
-    .velocityDecay(0.4)  // more damping = less jitter after settle
-    .on('tick', ticked);
-
-  // ── Draw silk thread paths (bezier with live wave physics) ──
+// ══════════════════════════════════════════════
+// FOCUSED VIEW: Single project's threads
+// ══════════════════════════════════════════════
+function renderFocused(){
   linkG.selectAll('*').remove();
-
-  // Each link gets a unique id for animateMotion mpath references
-  graphLinks.forEach((d,i)=>{ d._idx = i; d._phase = Math.random()*Math.PI*2; });
-
-  const link = linkG.selectAll('path.silk').data(graphLinks).enter()
-    .append('path').attr('class','silk')
-    .attr('id', d=>`silk-${d._idx}`)
-    .attr('fill','none')
-    .attr('stroke', d=>{
-      if(d.type==='hub'){
-        const pi = graphNodes.find(n=>n.id===d.target.id||n.id===d.target)?.projectIdx??0;
-        return PROJECT_COLORS[pi%PROJECT_COLORS.length];
-      }
-      if(d.type==='killed') return 'rgba(239,80,80,0.6)';
-      const tn = graphNodes.find(n=>n.id===d.target.id||n.id===d.target);
-      return tn ? threadColor(tn.id, 0.5) : 'rgba(200,200,255,0.35)';
-    })
-    .attr('stroke-width', d=>d.type==='hub' ? 2.2 : 1.4)
-    .attr('stroke-dasharray', d=>d.type==='killed' ? '5 3' : null)
-    .attr('stroke-linecap','round')
-    .attr('opacity', d=>{
-      const tId = typeof d.target==='object' ? d.target.id : d.target;
-      const tn = graphNodes.find(n=>n.id===tId);
-      const isAP = tn?.projectId === activeProjectId;
-      if(d.type==='hub') return isAP ? 0.88 : 0.28;
-      return isAP ? 0.7 : 0.18;
-    })
-    .attr('filter', d=>d.type==='hub' ? 'url(#link-glow)' : null);
-
-  // Traveling dot along each silk thread
-  const dots = linkG.selectAll('circle.dot').data(graphLinks.filter(d=>d.type!=='killed')).enter()
-    .append('circle').attr('class','dot')
-    .attr('r', d=>d.type==='hub' ? 3 : 2)
-    .attr('fill', d=>{
-      if(d.type==='hub'){
-        const pi = graphNodes.find(n=>n.id===d.target.id||n.id===d.target)?.projectIdx??0;
-        return PROJECT_COLORS[pi%PROJECT_COLORS.length];
-      }
-      const tn = graphNodes.find(n=>n.id===d.target.id||n.id===d.target);
-      return tn ? threadColor(tn.id, 0.9) : 'rgba(200,200,255,0.5)';
-    })
-    .attr('opacity', d=>{
-      const tId = typeof d.target==='object' ? d.target.id : d.target;
-      const tn = graphNodes.find(n=>n.id===tId);
-      return tn?.projectId===activeProjectId ? 0.85 : 0.2;
-    });
-
-  // Kick off animateMotion on each dot
-  dots.each(function(d){
-    const dur = 3 + d._idx * 0.4 % 4;
-    d3.select(this).append('animateMotion')
-      .attr('dur', `${dur}s`)
-      .attr('begin', `${-(d._idx * 0.55)}s`)
-      .attr('repeatCount','indefinite')
-      .append('mpath')
-      .attr('href', `#silk-${d._idx}`);
-  });
-
-  // ── Draw nodes ──
   nodeG.selectAll('*').remove();
-  labelG.selectAll('*').remove();
 
-  // Claude first
-  const claudeNode = graphNodes.find(n=>n.type==='claude');
-  drawClaudeNode(claudeNode.x||W/2, claudeNode.y||H/2);
+  const proj = projects.find(p => p.id === focusedProjectId);
+  if(!proj) { goHome(); return; }
 
-  // Project and thread nodes
-  const nonClaude = graphNodes.filter(n=>n.type!=='claude');
-  const nodeEl = nodeG.selectAll('g.node').data(nonClaude).enter()
-    .append('g').attr('class','node')
-    .attr('transform', d=>`translate(${d.x||W/2},${d.y||H/2})`)
-    .style('cursor','pointer')
-    .on('click', (e,d)=>{
-      e.stopPropagation();
-      if(d.type==='thread'){
-        openPanel(d.thread.id, d.thread);
-      } else if(d.type==='killed-group'){
-        // Show aggregate info for killed group — no messages, just info
-        openPanel(`killed_${d.projectId}`, {
-          title:`${d.killed.length} Killed Threads`,
-          status:'killed',
-          created_at: d.killed[0]?.created_at,
-        });
-      } else if(d.projectId && d.projectId !== activeProjectId){
-        setActiveProject(d.projectId);
-      }
-    })
-    .on('mouseenter', (e,d)=>showTip(e,d))
-    .on('mousemove', moveTip)
-    .on('mouseleave', hideTip)
-    .call(d3.drag()
-      .on('start', (e,d)=>{ if(!e.active) simulation.alphaTarget(0.2).restart(); d.fx=d.x; d.fy=d.y; })
-      .on('drag',  (e,d)=>{ d.fx=e.x; d.fy=e.y; })
-      .on('end',   (e,d)=>{
-        if(!e.active) simulation.alphaTarget(0);
-        // Keep node pinned where user dropped it; save to localStorage
-        if(d.type==='thread'){
-          savePosition(d.id, d.fx, d.fy);
-        }
-        // Project hubs: keep pinned but don't persist (they reset on reload)
-      }))
-    .on('dblclick', (e,d)=>{
-      // Double-click a thread node to release it back to the simulation
-      if(d.type==='thread'){
-        d.fx=null; d.fy=null;
-        clearPosition(d.id);
-        simulation.alphaTarget(0.15).restart();
-      }
-      e.stopPropagation();
+  const pi = projects.indexOf(proj);
+  const col = PROJECT_COLORS[pi % PROJECT_COLORS.length];
+  const alive = proj.threads.filter(t => t.status !== 'killed');
+  const killed = proj.threads.filter(t => t.status === 'killed');
+
+  // Build a simple tree: project hub on left, threads on right
+  const hubX = 140;
+  const hubY = H * 0.5;
+  const threadX = 460;
+  const threadSpacing = 78;
+  const totalThreads = alive.length + (killed.length ? 1 : 0);
+  const startY = hubY - ((totalThreads - 1) * threadSpacing) / 2;
+
+  // Project hub node
+  const pg = nodeG.append('g').attr('transform', `translate(${hubX},${hubY})`);
+  const pfo = pg.append('foreignObject')
+    .attr('x', -110).attr('y', -28).attr('width', 220).attr('height', 56);
+  const pdiv = pfo.append('xhtml:div').attr('class','project-card')
+    .style('border', `1.5px solid ${col}`)
+    .style('border-left', `4px solid ${col}`)
+    .style('box-shadow', `0 0 12px ${col}33`);
+  pdiv.append('xhtml:div').attr('class','pc-header')
+    .html(`<div class="pc-dot" style="background:${col};box-shadow:0 0 6px ${col}"></div><div class="pc-name">${escHtml(proj.name)}</div>`);
+  const activeCount = alive.filter(t => t.status === 'active').length;
+  pdiv.append('xhtml:div').attr('class','pc-info')
+    .text(`${alive.length} threads · ${activeCount} active`);
+
+  // Thread cards
+  const cardW = 210, cardH = 68, glowPad = 20;
+  const foW = cardW + glowPad*2, foH = cardH + glowPad*2;
+  // draw threads and chain links between them
+  let prevThreadPoint = null;
+  alive.forEach((t, ti) => {
+    const ty = startY + ti * threadSpacing;
+    const isCurrent = t.id === currentThreadId;
+    const safeStatus = /^[a-z]+$/.test(t.status||'') ? t.status : 'idle';
+    const sc = STATUS_COLOR[safeStatus] || STATUS_COLOR.idle;
+
+    // Link from hub to thread
+    const linkPath = d3.linkHorizontal()({
+      source: [hubX + 110, hubY],
+      target: [threadX - 105, ty]
     });
+    linkG.append('path')
+      .attr('d', linkPath)
+      .attr('fill', 'none')
+      .attr('stroke', `rgba(200,210,255,0.2)`)
+      .attr('stroke-width', 1.2);
+    // animated silver overlay on hub->thread links
+    linkG.append('path')
+      .attr('d', linkPath)
+      .attr('class', 'silver-connector')
+      .attr('opacity', 0.85);
 
-  nodeEl.each(function(d){
-    const g = d3.select(this);
-    const isActiveProj = d.projectId === activeProjectId;
-    const alpha = isActiveProj ? 1 : 0.45;
-    const col = PROJECT_COLORS[d.projectIdx%PROJECT_COLORS.length];
-
-    if(d.type==='project'){
-      // Project hub: circle + pill label below (never bleeds)
-      g.append('circle').attr('r',28)
-        .attr('fill','rgba(10,10,28,0.92)')
-        .attr('stroke',col).attr('stroke-width',2)
-        .attr('opacity',alpha)
-        .style('filter',isActiveProj ? `drop-shadow(0 0 14px ${col}99) drop-shadow(0 0 28px ${col}44)` : 'none');
-      // Center dot
-      g.append('circle').attr('r',6).attr('fill',col).attr('opacity',alpha*0.9);
-      // Label pill BELOW the circle — fixed width, never bleeds
-      const lw = 100, lh = 22;
-      g.append('rect').attr('x',-lw/2).attr('y',34).attr('width',lw).attr('height',lh)
-        .attr('rx',11).attr('fill','rgba(10,10,28,0.88)')
-        .attr('stroke',col).attr('stroke-width',1).attr('opacity',alpha*0.85);
-      g.append('text').attr('text-anchor','middle').attr('x',0).attr('y',34+lh/2+1)
-        .attr('dominant-baseline','middle')
-        .attr('fill',col).attr('font-size','9.5px').attr('font-weight','700')
-        .attr('font-family','JetBrains Mono,monospace').attr('letter-spacing','.06em')
-        .attr('opacity',alpha)
-        .text(d.label.length>13 ? d.label.slice(0,12)+'…' : d.label);
-
-    } else if(d.type==='thread'){
-      const tc = threadColor(d.id);                          // unique per-thread color
-      const sc = STATUS_COLOR[d.status]||'rgba(200,200,255,0.5)'; // status ring color
-      const sizeFactor = Math.max(0.7, 1 - threadCount * 0.012);
-      const r = Math.round((d.status==='active' ? 22 : 18) * sizeFactor);
-      const isPinned = d.fx !== null && d.fx !== undefined;
-      const isCurrent = d.thread && d.thread.id === currentThreadId;
-
-      // Active-thread: outer pulsing halo
-      if(isCurrent){
-        g.append('circle').attr('r',r+10).attr('class','active-halo')
-          .attr('fill','none')
-          .attr('stroke','rgba(0,255,179,0.55)')
-          .attr('stroke-width',1.5)
-          .style('animation','ring-pulse 2s ease-out infinite');
-        g.append('circle').attr('r',r+6).attr('class','active-halo2')
-          .attr('fill','none')
-          .attr('stroke','rgba(0,255,179,0.3)')
-          .attr('stroke-width',1)
-          .style('animation','ring-pulse 2s ease-out infinite 0.4s');
-      }
-      // Outer status ring (thin, shows state)
-      g.append('circle').attr('r',r+3)
-        .attr('fill','none')
-        .attr('stroke', isCurrent ? 'rgba(0,255,179,0.9)' : sc)
-        .attr('stroke-width', isCurrent ? 2 : 1)
-        .attr('opacity', alpha * (isCurrent ? 0.9 : 0.5))
-        .attr('stroke-dasharray', d.status==='idle'?'3 3':null);
-      // Main node body — colored by thread identity
-      g.append('circle').attr('r',r)
-        .attr('fill',isCurrent ? 'rgba(0,30,22,0.95)' : 'rgba(10,10,28,0.88)')
-        .attr('stroke', isCurrent ? '#00ffb3' : tc)
-        .attr('stroke-width', isCurrent ? 2.8 : (d.status==='active' ? 2.2 : 1.4))
-        .attr('opacity', alpha)
-        .style('filter', isCurrent
-          ? 'drop-shadow(0 0 12px rgba(0,255,179,0.7)) drop-shadow(0 0 24px rgba(0,255,179,0.3))'
-          : (isActiveProj && STATUS_GLOW[d.status]!=='none' ? `drop-shadow(0 0 8px ${tc}bb)` : 'none'));
-      // Center dot — thread color fill
-      g.append('circle').attr('r', isCurrent ? 6 : (isPinned ? 5 : 4)).attr('cx',0).attr('cy',0)
-        .attr('fill', isCurrent ? '#00ffb3' : tc).attr('opacity', alpha*0.9);
-      // Active-thread: "▶" play indicator top-right
-      if(isCurrent){
-        g.append('text').attr('x',r-2).attr('y',-(r-2))
-          .attr('text-anchor','middle').attr('dominant-baseline','middle')
-          .attr('font-size','8px').attr('fill','#00ffb3').attr('opacity',0.95)
-          .text('▶');
-      }
-      // Pin indicator for locked nodes
-      if(isPinned && !isCurrent){
-        g.append('circle').attr('r',2).attr('cx',r-4).attr('cy',-(r-4))
-          .attr('fill','rgba(255,255,255,0.6)').attr('opacity',alpha*0.7);
-      }
-      // Label below — bold + green for active thread
-      labelG.append('text')
-        .attr('x',(d.x||W/2)).attr('y',(d.y||H/2)+r+12)
-        .attr('text-anchor','middle')
-        .attr('fill', isCurrent ? '#00ffb3' : 'rgba(255,255,255,0.7)')
-        .attr('font-size', isCurrent ? '10.5px' : '9.5px')
-        .attr('font-weight', isCurrent ? '700' : '400')
-        .attr('font-family','JetBrains Mono,monospace')
-        .attr('opacity', isCurrent ? 1 : (isActiveProj ? 0.85 : 0.3))
-        .attr('class',`lbl lbl-${d.id}`)
-        .text((isCurrent ? '▶ ' : '') + (d.label.length>18 ? d.label.slice(0,17)+'…' : d.label));
-
-    } else if(d.type==='killed-group'){
-      g.append('circle').attr('r',20)
-        .attr('fill','rgba(30,6,6,0.9)')
-        .attr('stroke','rgba(239,80,80,0.55)')
-        .attr('stroke-width',1.2)
-        .attr('stroke-dasharray','3 2')
-        .attr('opacity',alpha);
-      g.append('text').attr('text-anchor','middle').attr('dominant-baseline','middle')
-        .attr('fill','rgba(255,140,140,0.85)').attr('font-size','9px').attr('font-weight','700')
-        .attr('font-family','JetBrains Mono,monospace').attr('opacity',alpha)
-        .text(d.label);
+    // Chain link from previous thread to this one (so threads appear connected)
+    if(prevThreadPoint){
+      const chainPath = d3.linkHorizontal()({
+        source: prevThreadPoint,
+        target: [threadX - 105, ty]
+      });
+      linkG.append('path')
+        .attr('d', chainPath)
+        .attr('class', 'silver-connector')
+        .attr('opacity', 0.95);
     }
+    prevThreadPoint = [threadX - 105, ty];
+
+    // Thread card — oversized foreignObject so box-shadow glow renders
+    const tg = nodeG.append('g').attr('class','node')
+      .attr('transform', `translate(${threadX},${ty})`);
+    const tfo = tg.append('foreignObject')
+      .attr('x', -(cardW/2 + glowPad)).attr('y', -(cardH/2 + glowPad))
+      .attr('width', foW).attr('height', foH)
+      .style('overflow','visible');
+    const wrapper = tfo.append('xhtml:div')
+      .style('width','100%').style('height','100%')
+      .style('display','flex').style('align-items','center').style('justify-content','center');
+    const div = wrapper.append('xhtml:div')
+      .attr('class', `thread-card status-${safeStatus}${isCurrent ? ' current' : ''}`)
+      .on('click', () => openPanel(t.id, t));
+
+    div.append('xhtml:div').attr('class','tc-header')
+      .html(`<div class="tc-dot" style="background:${escHtml(sc)};box-shadow:0 0 6px ${escHtml(sc)}"></div><div class="tc-name">${escHtml(t.title)}</div>`);
+    div.append('xhtml:div').attr('class','tc-preview')
+      .text(t.last_message || 'No messages yet');
+    const footer = div.append('xhtml:div').attr('class','tc-footer');
+    footer.append('xhtml:span').attr('class','tc-msgs').text(`💬 ${t.message_count || 0}`);
+    footer.append('xhtml:span').attr('class','tc-time').text(timeAgo(t.created_at));
   });
 
-  let _t = 0; // time counter for wave animation
+  // Killed group
+  if(killed.length){
+    const ky = startY + alive.length * threadSpacing;
+    const linkPath = d3.linkHorizontal()({
+      source: [hubX + 110, hubY],
+      target: [threadX - 80, ky]
+    });
+    linkG.append('path')
+      .attr('d', linkPath)
+      .attr('fill', 'none')
+      .attr('stroke', 'rgba(239,80,80,0.25)')
+      .attr('stroke-width', 1)
+      .attr('stroke-dasharray', '4 3');
 
-  function silkD(d, t){
-    const sx = d.source.x, sy = d.source.y;
-    const ex = d.target.x, ey = d.target.y;
-    const dx = ex-sx, dy = ey-sy;
-    const dist = Math.sqrt(dx*dx+dy*dy)||1;
-    // Perpendicular unit vector
-    const px = -dy/dist, py = dx/dist;
-    // Wave amplitude: hub links bigger, thread links smaller
-    const baseAmp = d.type==='hub' ? 28 : 16;
-    const amp = Math.sin(t*0.9 + (d._phase||0)) * baseAmp;
-    const c1x = sx + dx*0.3 + px*amp;
-    const c1y = sy + dy*0.3 + py*amp;
-    const c2x = sx + dx*0.7 - px*amp*0.7;
-    const c2y = sy + dy*0.7 - py*amp*0.7;
-    return `M${sx},${sy} C${c1x},${c1y} ${c2x},${c2y} ${ex},${ey}`;
+    const kg = nodeG.append('g').attr('class','node')
+      .attr('transform', `translate(${threadX},${ky})`);
+    const kfo = kg.append('foreignObject')
+      .attr('x', -80).attr('y', -18).attr('width', 160).attr('height', 36);
+    kfo.append('xhtml:div').attr('class','killed-card')
+      .html(`<span>✕</span><span>${killed.length} killed threads</span>`)
+      .on('click', () => openPanel(`killed_${proj.id}`, {
+        title: `${killed.length} Killed Threads`,
+        status: 'killed',
+        created_at: killed[0]?.created_at,
+        message_count: killed.reduce((s,t)=>s+(t.message_count||0),0),
+      }));
   }
 
-  function ticked(){
-    _t += 0.012;
-    // Update Claude node position
-    const cn = graphNodes.find(n=>n.type==='claude');
-    svg.select('.claude-node').attr('transform',`translate(${cn.x},${cn.y})`);
+  // Update counter for this project
+  document.getElementById('tc-n').textContent = alive.length;
+  document.getElementById('tc-l').textContent = alive.length===1?'thread':'threads';
 
-    // Update silk thread paths with live wave
-    link.attr('d', d => silkD(d, _t));
-
-    // Update non-claude nodes
-    nodeEl.attr('transform',d=>`translate(${d.x},${d.y})`);
-
-    // Update labels
-    graphNodes.filter(n=>n.type==='thread').forEach(d=>{
-      labelG.select(`.lbl-${d.id}`)
-        .attr('x',d.x).attr('y',d.y + (d.status==='active'?22:18) + 14);
-    });
-  }
-
-  // Update switcher
-  renderSwitcher();
-  updateCounter();
+  // Fit this view
+  fitToContent();
 }
 
-// ── Smooth project switch (no full rebuild) ───
-function setActiveProject(id){
-  if(id === activeProjectId) return;
-  activeProjectId = id;
-
-  const T = 400; // transition duration ms
-
-  // Fade links in/out
-  linkG.selectAll('path.silk')
-    .transition().duration(T).ease(d3.easeCubicInOut)
-    .attr('opacity', d=>{
-      const tId = typeof d.target==='object' ? d.target.id : d.target;
-      const tn  = graphNodes.find(n=>n.id===tId);
-      const isAP = tn?.projectId === activeProjectId;
-      if(d.type==='hub') return isAP ? 0.88 : 0.28;
-      return isAP ? 0.7 : 0.18;
-    });
-
-  // Fade dot opacity
-  linkG.selectAll('circle.dot')
-    .transition().duration(T).ease(d3.easeCubicInOut)
-    .attr('opacity', d=>{
-      const tId = typeof d.target==='object' ? d.target.id : d.target;
-      const tn  = graphNodes.find(n=>n.id===tId);
-      return tn?.projectId===activeProjectId ? 0.85 : 0.15;
-    });
-
-  // Scale up active project hub, scale down others
-  nodeG.selectAll('g.node')
-    .transition().duration(T).ease(d3.easeBackOut.overshoot(1.4))
-    .attr('opacity', d=> d.projectId===activeProjectId ? 1 : 0.38)
-    .attr('transform', d=>{
-      const scale = d.projectId===activeProjectId ? 1 : 0.82;
-      return `translate(${d.x},${d.y}) scale(${scale})`;
-    });
-
-  // Fade labels
-  labelG.selectAll('text')
-    .transition().duration(T).ease(d3.easeCubicInOut)
-    .attr('opacity', d=>{
-      // d here is bound to thread graphNodes
-      if(!d) return 0.3;
-      return d.projectId===activeProjectId ? 0.85 : 0.2;
-    });
-
-  // Tiny nudge — just enough to jiggle into place without a full re-layout
-  if(simulation) simulation.alpha(0.06).restart();
-
-  renderSwitcher();
-  updateCounter();
+function fitToContent(){
+  // Reset zoom to identity first so content renders at natural size,
+  // then compute bounds and set the correct zoom level
+  const bbox = rootG.node().getBBox();
+  if(!bbox || bbox.width <= 0 || bbox.height <= 0) return;
+  const pad = 80;
+  const scale = Math.min((W - pad*2) / bbox.width, (H - pad*2) / bbox.height, 1.0);
+  const cx = bbox.x + bbox.width / 2;
+  const cy = bbox.y + bbox.height / 2;
+  const tx = W/2 - cx * scale;
+  const ty = H/2 - cy * scale;
+  svg.transition().duration(600).ease(d3.easeCubicOut).call(
+    zoom.transform,
+    d3.zoomIdentity.translate(tx, ty).scale(scale)
+  );
 }
 
-// ── Tooltip ───────────────────────────────────
-const tip = document.getElementById('tip');
-function showTip(e,d){
-  if(d.type==='claude') return;
-  if(d.type==='project'){
-    document.getElementById('tip-title').textContent = d.label;
-    document.getElementById('tip-proj').textContent = 'project hub';
-    document.getElementById('tip-status').textContent = `${d.killed?.length||0} killed + ${graphNodes.filter(n=>n.projectId===d.projectId&&n.type==='thread').length} active`;
-    document.getElementById('tip-msgs').textContent = '—';
-  } else if(d.type==='thread'){
-    document.getElementById('tip-title').textContent = d.thread.title;
-    document.getElementById('tip-proj').textContent = projects.find(p=>p.id===d.projectId)?.name||'';
-    document.getElementById('tip-status').textContent = d.status;
-    document.getElementById('tip-msgs').textContent = d.thread.message_count;
-  } else if(d.type==='killed-group'){
-    document.getElementById('tip-title').textContent = `${d.killed.length} killed threads`;
-    document.getElementById('tip-proj').textContent = projects.find(p=>p.id===d.projectId)?.name||'';
-    document.getElementById('tip-status').textContent = 'killed';
-    document.getElementById('tip-msgs').textContent = d.killed.reduce((s,t)=>s+t.message_count,0);
-  }
-  tip.style.display='block';
-  moveTip(e);
-}
-function moveTip(e){
-  let x=e.clientX+14, y=e.clientY-10;
-  if(x+240>window.innerWidth) x=e.clientX-254;
-  if(y+120>window.innerHeight) y=window.innerHeight-130;
-  tip.style.left=x+'px'; tip.style.top=y+'px';
-}
-function hideTip(){ tip.style.display='none'; }
-
-// ── Project switcher ──────────────────────────
-function renderSwitcher(){
-  const el = document.getElementById('switcher');
-  el.innerHTML='';
-  if(projects.length<=1){el.style.display='none';return;}
-  el.style.display='flex';
-  projects.forEach((p,i)=>{
-    const btn = document.createElement('button');
-    btn.className='sp'+(p.id===activeProjectId?' on':'');
-    btn.innerHTML=`<span class="sp-dot" style="background:${PROJECT_COLORS[i%PROJECT_COLORS.length]}"></span>${p.name}`;
-    btn.title=`/SwProject ${p.id}`;
-    btn.addEventListener('click',()=>setActiveProject(p.id));
-    el.appendChild(btn);
-  });
+// ── View transitions ─────────────────────────
+function focusProject(projId){
+  viewMode = 'focused';
+  focusedProjectId = projId;
+  document.getElementById('back-btn').classList.add('visible');
+  renderFocused();
 }
 
-function updateCounter(){
-  const ap = projects.find(p=>p.id===activeProjectId);
-  const n = ap ? ap.threads.length : 0;
-  document.getElementById('tc-n').textContent = n;
-  document.getElementById('tc-l').textContent = n===1?'thread':'threads';
+function goHome(){
+  viewMode = 'home';
+  focusedProjectId = null;
+  document.getElementById('back-btn').classList.remove('visible');
+  renderHome();
+  fitToContent();
+}
+
+function render(){
+  if(viewMode === 'focused') renderFocused();
+  else renderHome();
 }
 
 // ── Detail Panel ─────────────────────────────
@@ -883,33 +711,28 @@ const BADGE_STYLE = {
 };
 
 function roleClass(role){
-  if(role==='user')      return 'role-user';
+  if(role==='user') return 'role-user';
   if(role==='assistant') return 'role-assistant';
   return 'role-tool';
-}
-
-function fmtTs(ts){
-  if(!ts) return '';
-  try { return new Date(ts).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); }
-  catch { return ts.slice(0,16).replace('T',' '); }
 }
 
 function renderMessages(msgs, prepend=false){
   const container = document.getElementById('msgs');
   const frag = document.createDocumentFragment();
-  msgs.forEach((m,i)=>{
-    if(i>0){const sep=document.createElement('div');sep.className='msg-sep';frag.appendChild(sep);}
+  msgs.forEach(m=>{
     const div = document.createElement('div');
     div.className='msg';
     const rc = roleClass(m.role||'tool');
     const bodyClass = `msg-body role-${(m.role||'tool')}-body`;
-    // Sanitize: strip script/event-handler attributes to prevent stored XSS
     function sanitize(html){
       const t=document.createElement('template');
       t.innerHTML=html;
       t.content.querySelectorAll('script,iframe,object,embed').forEach(el=>el.remove());
       t.content.querySelectorAll('*').forEach(el=>{
-        [...el.attributes].forEach(a=>{if(/^on/i.test(a.name)||a.name==='href'&&/^javascript/i.test(a.value))el.removeAttribute(a.name)});
+        [...el.attributes].forEach(a=>{
+          if(/^on/i.test(a.name)) el.removeAttribute(a.name);
+          else if((a.name==='href'||a.name==='src'||a.name==='action')&&/^(javascript|data):/i.test(a.value.trim())) el.removeAttribute(a.name);
+        });
       });
       const d=document.createElement('div');d.appendChild(t.content);return d.innerHTML;
     }
@@ -930,46 +753,40 @@ function renderMessages(msgs, prepend=false){
 }
 
 async function openPanel(threadId, threadData){
-  const isSwitch = panelThreadId && panelThreadId !== threadId;
-  panelThreadId  = threadId;
-  panelOldestTs  = null;
-  panelHasMore   = false;
+  panelThreadId = threadId;
+  panelOldestTs = null;
+  panelHasMore = false;
 
-  // Populate header
-  const title  = threadData?.title || threadData?.name || threadId;
+  const title = threadData?.title || threadData?.name || threadId;
   const status = threadData?.status || 'idle';
   document.getElementById('panel-title').textContent = title;
   const badge = document.getElementById('panel-badge');
   badge.textContent = status;
   badge.style.cssText = BADGE_STYLE[status] || BADGE_STYLE.idle;
   document.getElementById('panel-ts').textContent = fmtTs(threadData?.created_at);
+  document.getElementById('panel-msg-count').textContent = threadData?.message_count ? `${threadData.message_count} msgs` : '';
+
+  let projName = '';
+  for(const p of projects){
+    if(p.threads.find(t => t.id === threadId)){ projName = p.name; break; }
+  }
+  document.getElementById('panel-project').textContent = projName ? `· ${projName}` : '';
 
   const msgs = document.getElementById('msgs');
+  msgs.innerHTML = '';
 
-  if(isSwitch){
-    // Cross-fade: fade out, swap, fade in
-    msgs.classList.add('fading');
-    await new Promise(r=>setTimeout(r,100));
-    msgs.innerHTML='';
-    msgs.classList.remove('fading');
-  } else {
-    msgs.innerHTML='';
-  }
-
-  // Skip message fetch for synthetic group IDs (killed groups, etc.)
   if(threadId.startsWith('killed_')){
     msgs.innerHTML='<div style="padding:20px;color:rgba(239,120,120,0.6);font-size:11px">Archived threads — no live messages.</div>';
     document.getElementById('panel').classList.add('open');
     return;
   }
 
-  // Fetch messages
   try{
-    const res  = await fetch(`${API}/api/threads/${threadId}/messages`);
+    const res = await fetch(`${API}/api/threads/${threadId}/messages`);
     const data = await res.json();
     if(Array.isArray(data) && data.length>0){
       panelOldestTs = data[0].timestamp;
-      panelHasMore  = data.length >= 50;
+      panelHasMore = data.length >= 50;
       renderMessages(data);
       msgs.scrollTop = msgs.scrollHeight;
     } else {
@@ -980,11 +797,7 @@ async function openPanel(threadId, threadData){
   }
 
   document.getElementById('load-earlier').style.display = panelHasMore ? 'block' : 'none';
-
-  // Slide in
   document.getElementById('panel').classList.add('open');
-  msgs.classList.add('fading-in');
-  setTimeout(()=>msgs.classList.remove('fading-in'), 200);
 }
 
 async function loadEarlier(){
@@ -994,22 +807,29 @@ async function loadEarlier(){
   btn.disabled = true;
   try{
     const url = `${API}/api/threads/${panelThreadId}/messages?before=${encodeURIComponent(panelOldestTs)}`;
-    const res  = await fetch(url);
+    const res = await fetch(url);
     const data = await res.json();
     if(Array.isArray(data) && data.length>0){
       panelOldestTs = data[0].timestamp;
-      panelHasMore  = data.length >= 50;
+      panelHasMore = data.length >= 50;
       const msgs = document.getElementById('msgs');
       const prevH = msgs.scrollHeight;
-      renderMessages(data, true); // prepend
-      msgs.scrollTop = msgs.scrollHeight - prevH; // keep scroll position
+      renderMessages(data, true);
+      msgs.scrollTop = msgs.scrollHeight - prevH;
     } else {
       panelHasMore = false;
     }
-  } catch(e){ /* silent */ }
+  } catch(e){
+    panelHasMore = false;
+  }
   btn.textContent = '↑ Load earlier messages';
   btn.disabled = false;
   document.getElementById('load-earlier').style.display = panelHasMore ? 'block' : 'none';
+}
+
+function jumpToLatest(){
+  const msgs = document.getElementById('msgs');
+  msgs.scrollTop = msgs.scrollHeight;
 }
 
 function closePanel(){
@@ -1017,258 +837,119 @@ function closePanel(){
   panelThreadId = null;
 }
 
+// Jump to latest button visibility
+document.getElementById('msgs').addEventListener('scroll', function(){
+  const el = this;
+  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+  document.getElementById('jump-latest').style.display = atBottom ? 'none' : 'block';
+});
+
 // Close on outside click
 document.addEventListener('click', e=>{
   const panel = document.getElementById('panel');
-  if(panel.classList.contains('open') && !panel.contains(e.target)){
-    // Only close if click is not on the SVG nodes (those handle their own click)
-    if(!e.target.closest('#viz')) closePanel();
+  if(panel.classList.contains('open') && !panel.contains(e.target) && !e.target.closest('#viz')){
+    closePanel();
   }
 });
 
-// ── Data ──────────────────────────────────────
-// ── Smart diff apply ──────────────────────────
-// First call: full render. Subsequent calls: diff and update in-place.
-let _initialRenderDone = false;
+// Panel resize
+(function(){
+  const panel = document.getElementById('panel');
+  const handle = document.getElementById('panel-resize');
+  let startX, startW;
+  function onMove(ev){ panel.style.width = Math.max(300, Math.min(W - 120, startW + (startX - ev.clientX))) + 'px'; }
+  function onUp(){ document.removeEventListener('mousemove',onMove); document.removeEventListener('mouseup',onUp); }
+  handle.addEventListener('mousedown', e=>{
+    startX = e.clientX; startW = panel.offsetWidth;
+    e.preventDefault();
+    document.addEventListener('mousemove',onMove);
+    document.addEventListener('mouseup',onUp);
+  });
+})();
 
+// ── Data application ─────────────────────────
 function applyData(data){
   let incoming;
-  if(data.projects)                           incoming = data.projects.slice(0,3);
-  else if(Array.isArray(data) && data.length) incoming = [{ id:'default', name:'default', threads:data }];
-  else return;
-
-  // Track active thread — triggers re-render if changed
-  const newCurrentId = data.current_thread_id || null;
-  const currentChanged = newCurrentId !== currentThreadId;
-  currentThreadId = newCurrentId;
-
-  const newProjects = incoming.map(p=>({...p, threads: p.threads||[]}));
-
-  // First load — always full render
-  if(!_initialRenderDone){
-    projects = newProjects;
-    if(!activeProjectId||!projects.find(p=>p.id===activeProjectId))
-      activeProjectId = projects[0]?.id||null;
-    // Auto-switch to the project containing the active thread
-    if(currentThreadId){
-      for(const p of projects){
-        if(p.threads.find(t=>t.id===currentThreadId)){ activeProjectId=p.id; break; }
-      }
-    }
+  if(data.projects) incoming = data.projects.slice(0,4);
+  else if(Array.isArray(data) && data.length) incoming = [{id:'default', name:'default', threads:data}];
+  else{
+    currentThreadId = data.current_thread_id || null;
     render();
-    _initialRenderDone = true;
     return;
   }
 
-  // Active thread changed — full rebuild to update highlighting
-  if(currentChanged){ render(); return; }
+  currentThreadId = data.current_thread_id || null;
+  projects = incoming.map(p => ({...p, threads: p.threads||[]}));
 
-  // Subsequent WS updates — smart diff
-  let changed = false;
+  // If focused on a project that no longer exists, go home
+  if(viewMode === 'focused' && !projects.find(p => p.id === focusedProjectId)){
+    goHome();
+    return;
+  }
 
-  newProjects.forEach(np=>{
-    const existing = projects.find(p=>p.id===np.id);
-    if(!existing){
-      // New project — full rebuild needed
-      projects = newProjects;
-      activeProjectId = activeProjectId||projects[0]?.id||null;
-      render();
-      changed = false; // render() already handled everything
-      return;
-    }
-
-    // Diff threads
-    np.threads.forEach(nt=>{
-      const et = existing.threads.find(t=>t.id===nt.id);
-      if(!et){
-        // New thread — add node with entrance animation
-        existing.threads.push({...nt, _isNew:true});
-        changed = true;
-      } else if(et.status !== nt.status){
-        // Status changed — update in place
-        et.status = nt.status;
-        et.title  = nt.title || et.title;
-        et.message_count = nt.message_count ?? et.message_count;
-        changed = true;
-        updateNodeStatus(et);
-      }
-    });
-
-    // Removed threads — exit animation then remove
-    existing.threads.filter(et=>!np.threads.find(nt=>nt.id===et.id))
-      .forEach(et=>{ removeNodeAnimated(et.id); existing.threads = existing.threads.filter(t=>t.id!==et.id); changed=true; });
-  });
-
-  if(changed) applyDiff();
-}
-
-function updateNodeStatus(thread){
-  // Update node visuals in-place — no rebuild
-  const nId = `thr_${thread.id}`;
-  const node = graphNodes.find(n=>n.id===nId);
-  if(!node) return;
-  node.status = thread.status;
-
-  const tc = threadColor(nId);
-  const r  = thread.status==='active' ? 22 : 18;
-
-  nodeG.selectAll('g.node').filter(d=>d.id===nId)
-    .selectAll('circle:nth-child(2)')  // main body circle (after status ring)
-    .transition().duration(300)
-    .attr('stroke', tc)
-    .attr('r', r);
-
-  // Update silk thread color
-  linkG.selectAll('path.silk').filter(d=>{
-    const tId = typeof d.target==='object' ? d.target.id : d.target;
-    return tId === nId;
-  })
-    .transition().duration(300)
-    .attr('stroke', threadColor(nId, 0.5))
-    .attr('opacity', thread.projectId===activeProjectId ? 0.7 : 0.18);
-}
-
-function removeNodeAnimated(threadId){
-  const nId = `thr_${threadId}`;
-  nodeG.selectAll('g.node').filter(d=>d.id===nId)
-    .transition().duration(300).ease(d3.easeCubicIn)
-    .attr('transform', d=>`translate(${d.x},${d.y}) scale(0.1)`)
-    .style('opacity',0)
-    .remove();
-  linkG.selectAll('path.silk').filter(d=>{
-    const tId = typeof d.target==='object' ? d.target.id : d.target;
-    return tId === nId;
-  }).transition().duration(300).attr('opacity',0).remove();
-  labelG.select(`.lbl-${threadId}`).transition().duration(300).attr('opacity',0).remove();
-  graphNodes = graphNodes.filter(n=>n.id!==nId);
-  graphLinks = graphLinks.filter(l=>{
-    const tId = typeof l.target==='object' ? l.target.id : l.target;
-    return tId !== nId;
-  });
-}
-
-function applyDiff(){
-  // Add new nodes with entrance animation
-  projects.forEach(proj=>{
-    proj.threads.filter(t=>t._isNew).forEach(t=>{
-      delete t._isNew;
-      // Find parent hub position for initial placement
-      const hub = graphNodes.find(n=>n.id===`proj_${proj.id}`);
-      const angle = Math.random()*Math.PI*2;
-      const newNode = {
-        id:`thr_${t.id}`, type:'thread', label:t.title,
-        status:t.status, thread:t, projectIdx:projects.indexOf(proj), projectId:proj.id,
-        x:(hub?.x||W/2)+80*Math.cos(angle),
-        y:(hub?.y||H/2)+80*Math.sin(angle),
-      };
-      graphNodes.push(newNode);
-      graphLinks.push({ source:`proj_${proj.id}`, target:`thr_${t.id}`, type:'thread' });
-
-      // Add DOM node with entrance animation
-      const isActive = proj.id===activeProjectId;
-      const sc = STATUS_COLOR[t.status]||'rgba(200,200,255,0.5)';
-      const nodeEl = nodeG.append('g').attr('class','node')
-        .attr('transform',`translate(${newNode.x},${newNode.y}) scale(0.5)`)
-        .style('opacity','0')
-        .style('cursor','pointer')
-        .on('click',(e,d)=>{ e.stopPropagation(); openPanel(t.id, t); })
-        .on('mouseenter',(e)=>showTip(e,newNode))
-        .on('mousemove',moveTip).on('mouseleave',hideTip);
-      nodeEl.datum(newNode);
-      nodeEl.append('circle').attr('r',18).attr('fill','rgba(10,10,28,0.88)').attr('stroke',sc).attr('stroke-width',1.2).attr('opacity',isActive?1:0.45);
-      nodeEl.append('circle').attr('r',4).attr('fill',sc).attr('opacity',(isActive?1:0.45)*0.9);
-      labelG.append('text').attr('x',newNode.x).attr('y',newNode.y+30).attr('text-anchor','middle')
-        .attr('fill','rgba(255,255,255,0.7)').attr('font-size','9.5px').attr('font-family','JetBrains Mono,monospace')
-        .attr('opacity',isActive?0.85:0.3).attr('class',`lbl lbl-${t.id}`)
-        .text(t.title.length>18?t.title.slice(0,17)+'…':t.title);
-
-      // Entrance animation
-      nodeEl.transition().duration(400).ease(d3.easeBackOut.overshoot(1.3))
-        .attr('transform',`translate(${newNode.x},${newNode.y}) scale(1)`)
-        .style('opacity','1');
-
-      // Add silk thread with fade-in — use stable id matching animateMotion mpath
-      const silkId = `silk-thr-${t.id}`;
-      linkG.append('path').attr('class','silk')
-        .attr('id', silkId)
-        .attr('fill','none').attr('stroke',sc).attr('stroke-width',1.4)
-        .attr('stroke-linecap','round').attr('opacity',0)
-        .transition().duration(400).attr('opacity', isActive?0.7:0.18);
-      // Traveling dot on new thread
-      const newDot = linkG.append('circle').attr('class','dot')
-        .attr('r',2).attr('fill',sc).attr('opacity',0);
-      newDot.transition().duration(400).attr('opacity', isActive?0.75:0.15);
-      const am = newDot.append('animateMotion').attr('dur','4s').attr('begin','0s').attr('repeatCount','indefinite');
-      const mpath = document.createElementNS('http://www.w3.org/2000/svg','mpath');
-      mpath.setAttributeNS('http://www.w3.org/1999/xlink','href',`#${silkId}`);
-      am.node().appendChild(mpath);
-    });
-  });
-
-  // Re-energise simulation gently
-  if(simulation) simulation.alpha(0.1).restart();
-  renderSwitcher();
-  updateCounter();
+  render();
 }
 
 // ── Mock data ─────────────────────────────────
 const MOCK = [
   { id:'default', name:'My Project', threads:[
-    {id:'a1',title:'Thread Visualizer UI',  status:'active',   message_count:31,created_at:'2026-05-13T20:00:00Z'},
-    {id:'a2',title:'FastMCP Server',        status:'awaiting', message_count:44,created_at:'2026-05-13T18:00:00Z'},
-    {id:'a3',title:'DynamoDB Schema',       status:'running',  message_count:28,created_at:'2026-05-13T16:00:00Z'},
-    {id:'a4',title:'OpenSearch Index',      status:'idle',     message_count:12,created_at:'2026-05-13T14:00:00Z'},
-    {id:'a5',title:'WebSocket Manager',     status:'idle',     message_count:9, created_at:'2026-05-13T12:00:00Z'},
-    {id:'a6',title:'Code Index Hook',       status:'running',  message_count:17,created_at:'2026-05-13T10:00:00Z'},
-    {id:'a7',title:'Skill Registry',        status:'idle',     message_count:8, created_at:'2026-05-13T08:00:00Z'},
-    {id:'a8',title:'ADK Prototype',         status:'killed',   message_count:21,created_at:'2026-05-12T20:00:00Z'},
-    {id:'a9',title:'LiteLLM Spike',         status:'killed',   message_count:7, created_at:'2026-05-12T14:00:00Z'},
-    {id:'aa',title:'Old Auth Flow',         status:'killed',   message_count:5, created_at:'2026-05-11T10:00:00Z'},
+    {id:'a1',title:'Thread Visualizer UI',  status:'active',   message_count:31,created_at:'2026-05-13T20:00:00Z', last_message:'Redesigning the node layout to use a tree hierarchy...'},
+    {id:'a2',title:'FastMCP Server',        status:'awaiting', message_count:44,created_at:'2026-05-13T18:00:00Z', last_message:'Waiting for DynamoDB table creation to complete'},
+    {id:'a3',title:'DynamoDB Schema',       status:'running',  message_count:28,created_at:'2026-05-13T16:00:00Z', last_message:'Running migration script for single-table design'},
+    {id:'a4',title:'OpenSearch Index',      status:'idle',     message_count:12,created_at:'2026-05-13T14:00:00Z', last_message:'Index mapping configured with Titan embeddings'},
+    {id:'a5',title:'WebSocket Manager',     status:'idle',     message_count:9, created_at:'2026-05-13T12:00:00Z', last_message:'Broadcast fan-out tested with 10 concurrent clients'},
+    {id:'a6',title:'Code Index Hook',       status:'running',  message_count:17,created_at:'2026-05-13T10:00:00Z', last_message:'Indexing server/ directory, 847 files processed...'},
+    {id:'a7',title:'Skill Registry',        status:'idle',     message_count:8, created_at:'2026-05-13T08:00:00Z', last_message:'Registry JSON schema validated'},
+    {id:'a8',title:'ADK Prototype',         status:'killed',   message_count:21,created_at:'2026-05-12T20:00:00Z', last_message:'Pivoted away from ADK to MCP approach'},
+    {id:'a9',title:'LiteLLM Spike',         status:'killed',   message_count:7, created_at:'2026-05-12T14:00:00Z', last_message:''},
+    {id:'aa',title:'Old Auth Flow',         status:'killed',   message_count:5, created_at:'2026-05-11T10:00:00Z', last_message:''},
   ]},
   { id:'gemma', name:'Gemma Fine-Tune', threads:[
-    {id:'g1',title:'Training Run v3',       status:'active',   message_count:62,created_at:'2026-05-13T19:00:00Z'},
-    {id:'g2',title:'Dataset Cleaning',      status:'running',  message_count:38,created_at:'2026-05-13T17:00:00Z'},
-    {id:'g3',title:'Loss Curve Analysis',   status:'awaiting', message_count:19,created_at:'2026-05-13T15:00:00Z'},
-    {id:'g4',title:'Hyperparam Sweep',      status:'idle',     message_count:11,created_at:'2026-05-13T13:00:00Z'},
-    {id:'g5',title:'Tokenizer Config',      status:'idle',     message_count:6, created_at:'2026-05-13T11:00:00Z'},
-    {id:'g6',title:'Checkpoint Manager',    status:'running',  message_count:24,created_at:'2026-05-13T09:00:00Z'},
-    {id:'g7',title:'Eval Benchmark',        status:'idle',     message_count:14,created_at:'2026-05-13T07:00:00Z'},
-    {id:'g8',title:'LoRA Config',           status:'idle',     message_count:8, created_at:'2026-05-12T22:00:00Z'},
-    {id:'g9',title:'Eval Run v2',           status:'killed',   message_count:31,created_at:'2026-05-12T18:00:00Z'},
-    {id:'ga',title:'Eval Run v1',           status:'killed',   message_count:18,created_at:'2026-05-12T12:00:00Z'},
-    {id:'gb',title:'Base Model Spike',      status:'killed',   message_count:9, created_at:'2026-05-11T16:00:00Z'},
-    {id:'gc',title:'Data Pipeline v1',      status:'killed',   message_count:4, created_at:'2026-05-10T10:00:00Z'},
-    {id:'gd',title:'Warmup Experiment',     status:'killed',   message_count:6, created_at:'2026-05-09T14:00:00Z'},
+    {id:'g1',title:'Training Run v3',       status:'active',   message_count:62,created_at:'2026-05-13T19:00:00Z', last_message:'Epoch 7/10 complete, loss: 0.847, val_acc: 91.2%'},
+    {id:'g2',title:'Dataset Cleaning',      status:'running',  message_count:38,created_at:'2026-05-13T17:00:00Z', last_message:'Deduplicating 2.3M samples, 12% removed so far'},
+    {id:'g3',title:'Loss Curve Analysis',   status:'awaiting', message_count:19,created_at:'2026-05-13T15:00:00Z', last_message:'Waiting for wandb export to complete'},
+    {id:'g4',title:'Hyperparam Sweep',      status:'idle',     message_count:11,created_at:'2026-05-13T13:00:00Z', last_message:'Best config: lr=2e-4, batch=32, warmup=500'},
+    {id:'g5',title:'Tokenizer Config',      status:'idle',     message_count:6, created_at:'2026-05-13T11:00:00Z', last_message:'Using sentencepiece with 32k vocab'},
+    {id:'g6',title:'Checkpoint Manager',    status:'running',  message_count:24,created_at:'2026-05-13T09:00:00Z', last_message:'Uploading checkpoint epoch-7 to S3...'},
+    {id:'g7',title:'Eval Benchmark',        status:'idle',     message_count:14,created_at:'2026-05-13T07:00:00Z', last_message:'MMLU score: 68.4, HumanEval: 42.1'},
+    {id:'g8',title:'LoRA Config',           status:'idle',     message_count:8, created_at:'2026-05-12T22:00:00Z', last_message:'r=16, alpha=32, dropout=0.05 selected'},
+    {id:'g9',title:'Eval Run v2',           status:'killed',   message_count:31,created_at:'2026-05-12T18:00:00Z', last_message:''},
+    {id:'ga',title:'Eval Run v1',           status:'killed',   message_count:18,created_at:'2026-05-12T12:00:00Z', last_message:''},
+    {id:'gb',title:'Base Model Spike',      status:'killed',   message_count:9, created_at:'2026-05-11T16:00:00Z', last_message:''},
+    {id:'gc',title:'Data Pipeline v1',      status:'killed',   message_count:4, created_at:'2026-05-10T10:00:00Z', last_message:''},
+    {id:'gd',title:'Warmup Experiment',     status:'killed',   message_count:6, created_at:'2026-05-09T14:00:00Z', last_message:''},
   ]},
   { id:'client-a', name:'Client Arcturus', threads:[
-    {id:'c1',title:'System Architecture',   status:'active',   message_count:47,created_at:'2026-05-13T20:00:00Z'},
-    {id:'c2',title:'API Contract',          status:'awaiting', message_count:33,created_at:'2026-05-13T18:00:00Z'},
-    {id:'c3',title:'Cost Estimate',         status:'running',  message_count:22,created_at:'2026-05-13T16:00:00Z'},
-    {id:'c4',title:'Pitch Deck',            status:'active',   message_count:18,created_at:'2026-05-13T14:00:00Z'},
-    {id:'c5',title:'DB Schema Design',      status:'idle',     message_count:14,created_at:'2026-05-13T12:00:00Z'},
-    {id:'c6',title:'Auth Flow',             status:'running',  message_count:27,created_at:'2026-05-13T10:00:00Z'},
-    {id:'c7',title:'Infra Provisioning',    status:'idle',     message_count:9, created_at:'2026-05-13T08:00:00Z'},
-    {id:'c8',title:'Security Review',       status:'awaiting', message_count:16,created_at:'2026-05-13T06:00:00Z'},
-    {id:'c9',title:'Performance Baseline',  status:'idle',     message_count:7, created_at:'2026-05-12T22:00:00Z'},
-    {id:'ca',title:'Monitoring Setup',      status:'idle',     message_count:5, created_at:'2026-05-12T20:00:00Z'},
-    {id:'cb',title:'Scope v1',              status:'killed',   message_count:19,created_at:'2026-05-12T14:00:00Z'},
-    {id:'cc',title:'Old Arch Proposal',     status:'killed',   message_count:14,created_at:'2026-05-12T10:00:00Z'},
-    {id:'cd',title:'Vendor Eval',           status:'killed',   message_count:8, created_at:'2026-05-11T18:00:00Z'},
-    {id:'ce',title:'Monolith Spike',        status:'killed',   message_count:6, created_at:'2026-05-11T12:00:00Z'},
-    {id:'cf',title:'Kubernetes Spike',      status:'killed',   message_count:4, created_at:'2026-05-10T10:00:00Z'},
+    {id:'c1',title:'System Architecture',   status:'active',   message_count:47,created_at:'2026-05-13T20:00:00Z', last_message:'Finalized microservices boundary: auth, billing, core API'},
+    {id:'c2',title:'API Contract',          status:'awaiting', message_count:33,created_at:'2026-05-13T18:00:00Z', last_message:'Waiting for client review of OpenAPI spec v2.1'},
+    {id:'c3',title:'Cost Estimate',         status:'running',  message_count:22,created_at:'2026-05-13T16:00:00Z', last_message:'Calculating infra costs for 3 deployment tiers'},
+    {id:'c4',title:'Pitch Deck',            status:'active',   message_count:18,created_at:'2026-05-13T14:00:00Z', last_message:'Added competitive analysis slide with 4 alternatives'},
+    {id:'c5',title:'DB Schema Design',      status:'idle',     message_count:14,created_at:'2026-05-13T12:00:00Z', last_message:'PostgreSQL schema with 12 tables, all FKs mapped'},
+    {id:'c6',title:'Auth Flow',             status:'running',  message_count:27,created_at:'2026-05-13T10:00:00Z', last_message:'Implementing OAuth2 PKCE flow with refresh tokens'},
+    {id:'c7',title:'Infra Provisioning',    status:'idle',     message_count:9, created_at:'2026-05-13T08:00:00Z', last_message:'Terraform modules for EKS + RDS ready'},
+    {id:'c8',title:'Security Review',       status:'awaiting', message_count:16,created_at:'2026-05-13T06:00:00Z', last_message:'Pending OWASP top-10 scan results from SonarQube'},
+    {id:'c9',title:'Performance Baseline',  status:'idle',     message_count:7, created_at:'2026-05-12T22:00:00Z', last_message:'k6 load test: p95=180ms at 500 RPS'},
+    {id:'ca',title:'Monitoring Setup',      status:'idle',     message_count:5, created_at:'2026-05-12T20:00:00Z', last_message:'Grafana dashboards imported, alerts configured'},
+    {id:'cb',title:'Scope v1',              status:'killed',   message_count:19,created_at:'2026-05-12T14:00:00Z', last_message:''},
+    {id:'cc',title:'Old Arch Proposal',     status:'killed',   message_count:14,created_at:'2026-05-12T10:00:00Z', last_message:''},
+    {id:'cd',title:'Vendor Eval',           status:'killed',   message_count:8, created_at:'2026-05-11T18:00:00Z', last_message:''},
+    {id:'ce',title:'Monolith Spike',        status:'killed',   message_count:6, created_at:'2026-05-11T12:00:00Z', last_message:''},
+    {id:'cf',title:'Kubernetes Spike',      status:'killed',   message_count:4, created_at:'2026-05-10T10:00:00Z', last_message:''},
   ]},
 ];
 
-// ── WS ────────────────────────────────────────
+// ── WebSocket ─────────────────────────────────
 let wsRetry=1000;
 function connectWs(){
   setHealth('warn','connecting...');
   const ws=new WebSocket(WS);
   ws.onopen=()=>{wsRetry=1000;setHealth('ok','connected')};
   ws.onmessage=e=>{
-    const d=JSON.parse(e.data);
-    if(d.projects) applyData(d);
-    else if(d.threads) applyData({projects:[{id:'default',name:'default',threads:d.threads}], current_thread_id: d.current_thread_id||null});
+    try{
+      const d=JSON.parse(e.data);
+      if(d && d.projects && d.projects.length > 0) applyData(d);
+      else if(d && d.threads && d.threads.length > 0) applyData({projects:[{id:'default',name:'default',threads:d.threads}], current_thread_id: d.current_thread_id||null});
+    }catch(err){ console.warn('ws parse error',err); }
   };
   ws.onclose=()=>{setHealth('err','disconnected');setTimeout(connectWs,wsRetry);wsRetry=Math.min(wsRetry*2,16000)};
   ws.onerror=()=>ws.close();
@@ -1279,8 +960,6 @@ function setHealth(s,m){
 }
 
 // ── Init ──────────────────────────────────────
-// Show mock immediately — frozen, no WebSocket overwrite
-// Touch support for <900px (AC3)
 let _touchStartX = 0;
 document.addEventListener('touchstart', e=>{ _touchStartX = e.touches[0].clientX; }, {passive:true});
 document.addEventListener('touchend', e=>{
@@ -1288,27 +967,44 @@ document.addEventListener('touchend', e=>{
   if(dx > 60 && document.getElementById('panel').classList.contains('open')) closePanel();
 }, {passive:true});
 
-// Init: try live data first, fall back to mock if server returns empty
 async function init(){
   try {
-    const res  = await fetch(`${API}/api/threads`);
+    const res = await fetch(`${API}/api/threads`);
     const data = await res.json();
     const hasProjects = data.projects && data.projects.length > 0;
-    const hasThreads  = Array.isArray(data) && data.length > 0;
+    const hasThreads = Array.isArray(data) && data.length > 0;
     if(hasProjects || hasThreads){
-      applyData(data);   // real server has threads — use live data
+      applyData(data);
     } else {
-      applyData({ projects: MOCK, _isMock: true });  // no real threads yet — show mock
-      setHealth('warn','demo data — use CT <name> to create a thread');
+      applyData({ projects: MOCK, current_thread_id: 'a1' });
+      setHealth('warn','demo data');
     }
   } catch(e) {
-    applyData({ projects: MOCK });    // server unreachable — show mock
+    applyData({ projects: MOCK, current_thread_id: 'a1' });
+    setHealth('warn','demo data (offline)');
   }
-  connectWs();  // always connect WS for live updates
+  // Initial fit after first render (give foreignObjects time to layout)
+  svg.call(zoom.transform, d3.zoomIdentity);
+  setTimeout(() => fitToContent(), 150);
+  connectWs();
 }
 init();
 
-window.addEventListener('resize',()=>location.reload());
+window.addEventListener('resize', () => {
+  W = window.innerWidth; H = window.innerHeight - 54 - 36;
+  svgEl.setAttribute('width', W);
+  svgEl.setAttribute('height', H);
+  render();
+  setTimeout(() => fitToContent(), 50);
+});
+
+// Keyboard: Escape to go back / close panel
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape'){
+    if(document.getElementById('panel').classList.contains('open')) closePanel();
+    else if(viewMode === 'focused') goHome();
+  }
+});
 </script>
 </body>
 </html>

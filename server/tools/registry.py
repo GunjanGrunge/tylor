@@ -40,7 +40,12 @@ def _invalid_category(tool_group: str) -> McpError:
 def _read_registry() -> dict:
     if not REGISTRY_PATH.exists():
         return {"version": "1.0", "skills": []}
-    return json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+    try:
+        return json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        import logging
+        logging.getLogger(__name__).warning("registry.json is malformed — falling back to empty registry")
+        return {"version": "1.0", "skills": []}
 
 
 def _registry_skills() -> list[dict]:
@@ -151,7 +156,7 @@ def detect_registry_skill(task: str, auto_load: bool = False) -> dict:
     tokens = _task_tokens(task)
     for skill in _registry_skills():
         name = skill.get("name", "").strip()
-        if not name or not tokens.intersection(_skill_keyword_tokens(skill)):
+        if not name or len(tokens.intersection(_skill_keyword_tokens(skill))) < 2:
             continue
 
         if auto_load and skill.get("module") and skill.get("tools"):

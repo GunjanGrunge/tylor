@@ -1,75 +1,84 @@
-"""Static checks for Story 6.3 silk thread SVG animation."""
+"""Static checks for the Thread Visualizer tree layout and node cards."""
 from pathlib import Path
 
 import pytest
 
 
-UI_HTML = Path(__file__).parent.parent.parent.parent / "ui" / "index.html"
+UI_HTML = Path(__file__).parent.parent.parent / "ui" / "index.html"
 
 
 def _html() -> str:
     return UI_HTML.read_text(encoding="utf-8")
 
 
-def test_silk_curve_css_and_gradient_defs_present():
+def test_tree_layout_uses_d3_hierarchy():
     html = _html()
-    assert ".thread-link" in html
-    assert "stroke:rgba(139,92,246,0.35)" in html
-    assert "stroke-width:1.5" in html
-    assert "fill:none" in html
-    assert "stroke-linecap:round" in html
-    assert "id=\"active-thread-gradient\"" in html
-    assert "stop-color=\"#8b5cf6\"" in html
-    assert "stop-color=\"#22d3ee\"" in html
-    assert ".thread-link.status-active" in html
-    assert "opacity:.6" in html
-    assert ".thread-link.status-killed" in html
-    assert "opacity:.15" in html
+    assert "d3.linkHorizontal()" in html
+    assert "viewMode" in html
+    assert "renderHome" in html
+    assert "renderFocused" in html
 
 
-def test_silk_path_uses_cubic_bezier_with_perpendicular_offset_and_tick_updates():
+def test_thread_cards_use_foreign_object():
     html = _html()
-    assert "function silkPath(t, now=performance.now())" in html
-    assert "function threadAmplitude(status)" in html
-    assert "const wave = Math.sin(now * 0.0014 + (t._phase || 0)) * threadAmplitude(t.status)" in html
-    assert "const offset = dist * 0.22 + wave" in html
-    assert "const px = -dy / dist" in html
-    assert "const py = dx / dist" in html
-    assert "return `M ${CX} ${CY} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${t.x} ${t.y}`" in html
-    assert "renderSilkThreads()" in html
-    assert ".attr('d', d => silkPath(d, now))" in html
+    assert "foreignObject" in html
+    assert "thread-card" in html
+    assert "tc-name" in html
+    assert "tc-preview" in html
+    assert "tc-footer" in html
 
 
-def test_thread_bubbles_are_static_left_lanes_with_animated_thread_physics():
+def test_project_cards_present():
     html = _html()
-    assert "function layoutThreadLanes()" in html
-    assert "const laneX = Math.max(170, Math.min(260, W * 0.2))" in html
-    assert "wrap.style.left = t.x + 'px'" in html
-    assert "wrap.style.top = t.y + 'px'" in html
-    assert "function animateThreadPhysics(now)" in html
-    assert "requestAnimationFrame(animateThreadPhysics)" in html
-    assert "d3.forceSimulation" not in html
-    assert "d3.forceCenter" not in html
+    assert "project-card" in html
+    assert "pc-name" in html
+    assert "pc-info" in html
 
 
-def test_silk_pulse_dots_use_animate_motion_after_two_seconds():
+def test_status_classes_on_thread_cards():
     html = _html()
-    assert ".silk-dot" in html
-    assert ".attr('r', 4)" in html
-    assert ".attr('fill', 'rgba(255,255,255,0.6)')" in html
-    assert ".append('animateMotion')" in html
-    assert ".attr('repeatCount', 'indefinite')" in html
-    assert "randomDuration(t)" in html
-    assert "Math.random()*4 + 3" in html
-    assert "randomBegin(t, index)" in html
-    assert "setTimeout(() => graphSvg.classed('silk-ready', true), 2000)" in html
+    assert "status-active" in html
+    assert "status-awaiting" in html
+    assert "status-running" in html
+    assert "status-idle" in html
+    assert "status-killed" in html
 
 
-def test_silk_threads_render_paths_and_motion_dots_in_browser():
+def test_no_silk_wave_animation():
+    """Old silk wave animation was removed in favor of static d3.linkHorizontal."""
+    html = _html()
+    assert "function silkD(" not in html
+    assert "function silkPath(" not in html
+    assert "animateMotion" not in html
+    assert "ring-pulse" not in html
+
+
+def test_detail_panel_has_improved_structure():
+    html = _html()
+    assert "panel-resize" in html
+    assert "jump-latest" in html
+    assert "panel-msg-count" in html
+    assert "panel-project" in html
+
+
+def test_tree_renders_in_browser():
+    """Integration test: loads index.html with mock data and checks nodes render."""
+    import socket
+
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
         pytest.skip("playwright is not installed")
+
+    # Skip if the real UI server is running (it overwrites mock data via WS)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.settimeout(0.5)
+        sock.connect(("localhost", 8765))
+        sock.close()
+        pytest.skip("UI server running on :8765 — browser test needs offline mode")
+    except (ConnectionRefusedError, OSError):
+        sock.close()
 
     with sync_playwright() as p:
         try:
@@ -79,27 +88,11 @@ def test_silk_threads_render_paths_and_motion_dots_in_browser():
         page = browser.new_page()
         errors = []
         page.on("pageerror", lambda exc: errors.append(str(exc)))
-        page.route(
-            "**/api/threads",
-            lambda route: route.fulfill(
-                status=200,
-                content_type="application/json",
-                body=(
-                    '[{"id":"active-one","title":"Active Thread","status":"active",'
-                    '"created_at":"2026-05-13T00:00:00Z","message_count":3},'
-                    '{"id":"idle-two","title":"Idle Thread","status":"idle",'
-                    '"created_at":"2026-05-13T00:00:00Z","message_count":1}]'
-                ),
-            ),
-        )
-        page.route("**/ws/threads", lambda route: route.abort())
         page.goto(UI_HTML.resolve().as_uri(), wait_until="domcontentloaded", timeout=10000)
-        page.wait_for_function("document.querySelectorAll('path.thread-link').length >= 2")
-        page.wait_for_function("document.querySelectorAll('circle.silk-dot animateMotion').length >= 2")
-        page.wait_for_timeout(2100)
+        # When server is unreachable, mock data renders after fetch fails
+        page.wait_for_function("document.querySelectorAll('g.node').length >= 1", timeout=8000)
 
-        assert page.locator("#graph-svg.silk-ready").count() == 1
-        assert page.locator("path.thread-link.status-active").count() >= 1
-        assert page.locator("path.thread-link.status-idle").count() >= 1
+        assert page.locator("g.node").count() >= 1
+        assert page.locator("foreignObject").count() >= 1
         assert errors == []
         browser.close()

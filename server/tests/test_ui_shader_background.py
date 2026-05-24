@@ -1,8 +1,8 @@
-"""Static checks for the Thread Visualizer background layers."""
+"""Static checks for the Thread Visualizer background and performance."""
 from pathlib import Path
 
 
-UI_HTML = Path(__file__).parent.parent.parent.parent / "ui" / "index.html"
+UI_HTML = Path(__file__).parent.parent.parent / "ui" / "index.html"
 
 
 def _html() -> str:
@@ -31,22 +31,19 @@ def test_old_particle_background_was_removed():
     assert "function drawBg()" not in html
 
 
-def test_sparkles_background_canvas_is_layered_behind_thread_graph():
+def test_no_continuous_canvas_animation():
+    """The redesigned UI uses a static CSS gradient, no canvas animation loops."""
     html = _html()
-    assert '<canvas id="sparkles-canvas" aria-hidden="true"></canvas>' in html
-    assert "#sparkles-canvas" in html
-    assert "mix-blend-mode:screen" in html
-    assert "#graph-svg  { position:fixed; inset:0; z-index:1; pointer-events:none; }" in html
-    assert "/* bubble nodes appended to body at z-index:3 */" in html
+    assert "const STARS" not in html
+    assert "bgCanvas" not in html
+    assert "drawBg()" not in html
+    assert "radial-gradient" in html
 
 
-def test_sparkles_background_has_particles_without_title_component():
+def test_no_force_simulation():
+    """The redesigned UI uses d3.linkHorizontal() instead of force simulation."""
     html = _html()
-    assert "const SPARKLE_COUNT = 95" in html
-    assert "function makeSparkle()" in html
-    assert "function drawSparkle(ctx, x, y, r, opacity, color)" in html
-    assert "function drawSparkles(now)" in html
-    assert "sparklesCtx.globalCompositeOperation = 'lighter'" in html
-    assert "requestAnimationFrame(drawSparkles)" in html
-    assert "SparklesCore" not in html
-    assert "sparkles-title" not in html
+    assert "d3.forceSimulation" not in html
+    assert "d3.forceCenter" not in html
+    assert "d3.forceManyBody" not in html
+    assert "d3.linkHorizontal()" in html

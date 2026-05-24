@@ -1,5 +1,6 @@
 """server/tools/agents.py — Tier 1 agent orchestration MCP tools."""
 from __future__ import annotations
+import asyncio
 import uuid
 import re
 
@@ -8,6 +9,7 @@ from mcp.types import ErrorData, INVALID_PARAMS
 
 from .personas import list_persona_summaries, load_persona
 from ._mcp import mcp
+from .harness import run_with_agents
 
 _AGENT_ID_RE   = re.compile(r"^[a-zA-Z0-9_-]+$")
 _THREAD_ID_RE  = re.compile(r"^[a-f0-9]{32}$")  # uuid4().hex format
@@ -56,10 +58,81 @@ def list_personas() -> dict:
     return {"personas": list_persona_summaries()}
 
 
+def _run_persona_agent(
+    agent_id: str,
+    thread_id: str,
+    task: str,
+    role_prompt: str,
+    db,
+) -> dict:
+    """
+    Drive the Agent SDK harness synchronously for a persona sub-agent.
+    Collects streamed output, persists it, and updates agent state to completed.
+    """
+    # Verify SDK is importable before doing any work
+    try:
+        import claude_agent_sdk  # noqa: F401
+    except (ImportError, TypeError):
+        raise _invalid_params(
+            "Agent SDK not installed — run: pip install claude-agent-sdk"
+        )
+
+    async def _collect():
+        chunks: list[str] = []
+        async for chunk in run_with_agents(
+            message=task,
+            thread_id=thread_id,
+            system_prompt=role_prompt,
+        ):
+            chunks.append(chunk)
+        return "".join(chunks)
+
+    # Check for a running event loop BEFORE creating any coroutine object so
+    # no coroutine is left unawaited if we fall through to the thread-pool path.
+    try:
+        asyncio.get_running_loop()
+        _in_running_loop = True
+    except RuntimeError:
+        _in_running_loop = False
+
+    if not _in_running_loop:
+        output = asyncio.run(_collect())
+    else:
+        # Already inside a running event loop (e.g. tests or async callers):
+        # run in a dedicated thread with its own clean event loop.
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            output = pool.submit(lambda: asyncio.run(_collect())).result()
+
+    # Persist output to thread
+    try:
+        result = persist_agent_output(
+            thread_id=thread_id,
+            agent_id=agent_id,
+            output=output or "(no output)",
+            task=task,
+        )
+        output_sk = result.get("output_sk")
+    except Exception:
+        output_sk = None
+
+    # Update agent state to completed
+    db.put_agent_state(
+        thread_id=thread_id,
+        agent_id=agent_id,
+        state={
+            "Status": "completed",
+            "Task": task,
+        },
+    )
+
+    return {"output_sk": output_sk, "output": output}
+
+
 @mcp.tool()
 def spawn_agent(persona: str, thread_id: str, task: str) -> dict:
     """
-    Spawn a specialist sub-agent persona within the given thread.
+    Spawn a specialist sub-agent persona within the given thread and execute it.
     The sub-agent is scoped to this thread — no cross-thread bleed.
     Available personas: ceo, cto, analyst, code_agent.
 
@@ -68,6 +141,14 @@ def spawn_agent(persona: str, thread_id: str, task: str) -> dict:
         thread_id: The thread to scope this agent to.
         task: The work the persona should perform inside this thread.
     """
+    # Validate SDK availability before writing any state
+    try:
+        import claude_agent_sdk  # noqa: F401
+    except (ImportError, TypeError):
+        raise _invalid_params(
+            "Agent SDK not installed — run: pip install claude-agent-sdk"
+        )
+
     if not _THREAD_ID_RE.match(thread_id):
         raise _invalid_params(
             f"Invalid thread_id '{thread_id}' — must be a 32-character hex UUID (e.g. uuid4().hex)"
@@ -93,14 +174,23 @@ def spawn_agent(persona: str, thread_id: str, task: str) -> dict:
         },
     )
 
+    execution = _run_persona_agent(
+        agent_id=agent_id,
+        thread_id=thread_id,
+        task=task,
+        role_prompt=definition.role_prompt,
+        db=db,
+    )
+
     return {
         "agent_id": agent_id,
         "persona": definition.name,
         "thread_id": thread_id,
         "tools_loaded": list(definition.ecc_tool_categories),
-        "role_prompt": definition.role_prompt,
         "task": task,
         "state_sk": state_item["SK"],
+        "output_sk": execution.get("output_sk"),
+        "status": "completed",
     }
 
 

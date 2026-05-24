@@ -7,6 +7,7 @@ Persistent session memory per thread. Interactive with human-in-the-loop.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import AsyncIterator
@@ -201,16 +202,25 @@ def _load_session_id(thread_id: str) -> str | None:
 
 
 def _save_session_id(thread_id: str, session_id: str) -> None:
+    import fcntl
     f = _sessions_file()
     f.parent.mkdir(parents=True, exist_ok=True)
-    data: dict = {}
-    if f.exists():
+    lock = f.with_suffix(".lock")
+    with lock.open("a") as lf:
+        fcntl.flock(lf, fcntl.LOCK_EX)
         try:
-            data = json.loads(f.read_text())
-        except Exception:
-            pass
-    data[thread_id] = session_id
-    f.write_text(json.dumps(data, indent=2))
+            data: dict = {}
+            if f.exists():
+                try:
+                    data = json.loads(f.read_text())
+                except Exception:
+                    pass
+            data[thread_id] = session_id
+            tmp = f.with_suffix(".tmp")
+            tmp.write_text(json.dumps(data, indent=2))
+            tmp.replace(f)
+        finally:
+            fcntl.flock(lf, fcntl.LOCK_UN)
 
 
 # ── Core harness ──────────────────────────────────────────────────────────────
@@ -220,6 +230,7 @@ async def run_with_agents(
     thread_id: str,
     thread_name: str = "",
     cwd: str | None = None,
+    system_prompt: str | None = None,
 ) -> AsyncIterator[str]:
     try:
         from claude_agent_sdk import query, ClaudeAgentOptions
@@ -228,7 +239,8 @@ async def run_with_agents(
         return
 
     bmad_path = _get_bmad_path()
-    system_prompt = build_supervisor_prompt(thread_name, cwd, bmad_path)
+    if system_prompt is None:
+        system_prompt = build_supervisor_prompt(thread_name, cwd, bmad_path)
     agent_registry = build_agent_registry()
 
     session_id = _load_session_id(thread_id)

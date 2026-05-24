@@ -218,7 +218,11 @@ def _is_inside_roots(path: str, roots: list[str]) -> bool:
 
 def _candidate_paths(command: str, cwd: str) -> list[tuple[str, str]]:
     candidates = [(cwd, cwd)]
-    for token in shlex.split(command):
+    try:
+        tokens = shlex.split(command)
+    except ValueError as exc:
+        raise ToolError(f"Invalid command syntax: {exc}") from exc
+    for token in tokens:
         # Extract value from --flag=value or -f/value forms
         raw = token
         if "=" in token and token.startswith("-"):
@@ -714,6 +718,8 @@ def _run_afk_steps(
             }
 
         session["current_step"] = command
+        # Always re-read meta before writing to avoid clobbering concurrent flag updates
+        meta = _thread_meta(db, resolved_thread_id)
         meta["afk_session"] = session
         _write_thread_meta(db, resolved_thread_id, meta)
         result = execute_in_sandbox(
@@ -734,6 +740,7 @@ def _run_afk_steps(
             "steps_completed": index,
             "last_command_output": outcome["stdout_summary"],
         })
+        meta = _thread_meta(db, resolved_thread_id)
         meta["afk_session"] = session
         _write_thread_meta(db, resolved_thread_id, meta)
         _log_thread_event(

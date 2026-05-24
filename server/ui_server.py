@@ -77,23 +77,54 @@ ws_manager = WsManager()
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
+def _flatten_content(raw) -> str:
+    """Flatten a Content field that may be a string, list of dicts, or list of typed blocks."""
+    if not raw:
+        return ""
+    if isinstance(raw, str):
+        return raw
+    if isinstance(raw, list):
+        parts = []
+        for b in raw:
+            if isinstance(b, dict):
+                parts.append(b.get("text", ""))
+            elif hasattr(b, "text"):
+                parts.append(b.text)
+            else:
+                parts.append(str(b))
+        return " ".join(parts)
+    return str(raw)
+
+
 def _fetch_threads() -> list[dict]:
     """Fetch current thread list from storage. Returns [] on any error."""
     try:
-        from .tools.tylor import list_threads
+        from .tools.tylor import list_threads, _get_db
         result = list_threads()
         raw = result.get("threads", [])
-        return [
-            {
-                "id":            t.get("thread_id", ""),
+        db = _get_db()  # single client for all queries
+        threads = []
+        for t in raw:
+            thread_id = t.get("thread_id", "")
+            last_message = ""
+            try:
+                prefix = f"THREAD#{thread_id}#MSG#"
+                items = db.query_all(prefix)
+                if items:
+                    items.sort(key=lambda i: i.get("SK", ""))
+                    last_message = _flatten_content(items[-1].get("Content", ""))[:80]
+            except Exception:
+                pass
+            threads.append({
+                "id":            thread_id,
                 "title":         t.get("name", ""),
                 "status":        t.get("status", "idle"),
                 "created_at":    t.get("last_activity", ""),
                 "message_count": t.get("message_count", 0),
                 "project":       t.get("project", ""),
-            }
-            for t in raw
-        ]
+                "last_message":  last_message,
+            })
+        return threads
     except Exception as exc:
         logger.warning("ui_server: could not fetch threads: %s", exc)
         return []
@@ -133,7 +164,7 @@ def _fetch_messages(thread_id: str, limit: int = 50, before: str | None = None) 
         return [
             {
                 "role":      i.get("Role", "unknown"),
-                "content":   i.get("Content", ""),
+                "content":   _flatten_content(i.get("Content", "")),
                 "timestamp": i.get("CreatedAt", ""),
             }
             for i in tail
@@ -232,7 +263,21 @@ async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
 # ── App factory ──────────────────────────────────────────────────────────────
 
 def _make_app() -> web.Application:
-    app = web.Application()
+    # Simple CORS middleware to allow UI served from other origins (dev)
+    @web.middleware
+    async def _cors_middleware(request: web.Request, handler):
+        # Handle preflight
+        if request.method == 'OPTIONS':
+            resp = web.Response(status=204)
+        else:
+            resp = await handler(request)
+        # Allow all origins for local development. Narrow this in production.
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        resp.headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS'
+        resp.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
+        return resp
+
+    app = web.Application(middlewares=[_cors_middleware])
     app.router.add_get("/",                            handle_index)
     app.router.add_get("/api/threads",                 handle_threads)
     app.router.add_get("/api/threads/{thread_id}/messages", handle_thread_messages)

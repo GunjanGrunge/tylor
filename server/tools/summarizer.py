@@ -84,7 +84,9 @@ def _bedrock_model_id() -> str:
 
 
 def _mark_thread_killed(db: Any, thread_id: str) -> None:
-    meta = db.get_thread_meta(thread_id) or {}
+    meta = db.get_thread_meta(thread_id)
+    if not meta:
+        return  # thread was deleted; don't create a ghost META item
     attributes = dict(meta)
     attributes["Status"] = "killed"
     db.put_item(f"THREAD#{thread_id}#META", attributes)

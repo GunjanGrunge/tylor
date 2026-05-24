@@ -152,12 +152,17 @@ def checkpoint_current_thread(
     return {"status": "checkpointed", "thread_id": thread_id}
 
 
+_THREAD_ID_RE = re.compile(r"^[a-f0-9]{32}$")
+
+
 def dispatch_kill_thread_summary(
     thread_id: str,
     project_root: Path | str | None = None,
     python_executable: str = sys.executable,
 ) -> dict:
     """Start summarization in a detached process and return immediately."""
+    if not _THREAD_ID_RE.match(thread_id or ""):
+        return {"status": "skipped", "reason": "invalid_thread_id"}
     root = Path(project_root or Path(__file__).resolve().parents[2])
     subprocess.Popen(
         [
@@ -287,12 +292,20 @@ def index_code_file_for_active_thread(
     if not thread_id:
         return {"status": "skipped", "reason": "no_active_thread"}
 
-    memory = memory_client or _get_memory_client()
-    memory_id = memory.index_memory(
-        thread_id=thread_id,
-        fact=fact,
-        metadata={"type": "code_index"},
-    )
+    try:
+        memory = memory_client or _get_memory_client()
+    except Exception:
+        return {"status": "skipped", "reason": "memory_not_configured"}
+
+    try:
+        memory_id = memory.index_memory(
+            thread_id=thread_id,
+            fact=fact,
+            metadata={"type": "code_index"},
+        )
+    except Exception:
+        return {"status": "skipped", "reason": "memory_index_failed"}
+
     return {"status": "indexed", "thread_id": thread_id, "memory_id": memory_id, "fact": fact}
 
 

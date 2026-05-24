@@ -113,6 +113,31 @@ def _tool_count(text: str) -> int:
     return len(tool_refs)
 
 
+_SAFE_MODULE_RE = re.compile(r'^server\.tools\.[a-z0-9_.]+$')
+_SKILL_MD_MAX_BYTES = 64 * 1024  # 64 KB
+
+
+def _validate_module_path(module: str) -> None:
+    if not _SAFE_MODULE_RE.match(module):
+        raise _invalid_params(
+            f"Invalid module path '{module}' — must match server.tools.<name>"
+        )
+
+
+def _check_no_escaping_symlinks(source_path: Path, target_path: Path) -> None:
+    """Raise if any symlink in source resolves outside source_path."""
+    resolved_source = source_path.resolve()
+    for item in source_path.rglob("*"):
+        if item.is_symlink():
+            resolved = item.resolve()
+            try:
+                resolved.relative_to(resolved_source)
+            except ValueError:
+                raise _invalid_params(
+                    f"Skill package contains a symlink that escapes the source directory: {item}"
+                )
+
+
 def _copy_skill(source_path: Path, target_path: Path, overwrite: bool) -> None:
     if target_path.exists():
         if not overwrite:
@@ -120,7 +145,8 @@ def _copy_skill(source_path: Path, target_path: Path, overwrite: bool) -> None:
                 f"Skill '{target_path.name}' already exists; rerun with overwrite=True to replace it."
             )
         shutil.rmtree(target_path)
-    shutil.copytree(source_path, target_path)
+    _check_no_escaping_symlinks(source_path, target_path)
+    shutil.copytree(source_path, target_path, symlinks=True)
 
 
 def install_skill(
@@ -136,6 +162,8 @@ def install_skill(
     if not skill_file.exists():
         raise _invalid_params(f"SKILL.md not found in {source}")
 
+    if skill_file.stat().st_size > _SKILL_MD_MAX_BYTES:
+        raise _invalid_params(f"SKILL.md exceeds maximum size of {_SKILL_MD_MAX_BYTES // 1024} KB")
     text = skill_file.read_text(encoding="utf-8")
     metadata = _frontmatter(text)
     skill_name = _skill_name(source, metadata, name)
@@ -153,6 +181,8 @@ def install_skill(
     _copy_skill(source, target, overwrite=overwrite)
 
     module = metadata.get("module")
+    if module:
+        _validate_module_path(str(module))
     tools = metadata.get("tools")
     if isinstance(tools, str):
         tools = [tools]
