@@ -8,6 +8,7 @@
   [![Platform: Windows | macOS | Linux | WSL](https://img.shields.io/badge/Platform-Cross--Platform-success)](#)
   [![Claude Code](https://img.shields.io/badge/Integration-Claude_Code-orange)](#)
   [![GitHub Copilot](https://img.shields.io/badge/Integration-GitHub_Copilot-blue)](#)
+  [![Codex](https://img.shields.io/badge/Integration-Codex-black)](#)
   [![Antigravity](https://img.shields.io/badge/Integration-Antigravity-blueviolet)](#)
 </div>
 
@@ -54,7 +55,7 @@ Monitor your entire workspace through a beautiful, locally hosted web UI. Track 
 
 ## 🚀 Installation
 
-Tylor installs seamlessly into your Claude Code, Claude Desktop, GitHub Copilot, Antigravity, or VSCode Claude extension environment. Requires Python 3.8+.
+Tylor installs seamlessly into your Claude Code, Claude Desktop, Codex, GitHub Copilot, Antigravity, or VSCode Claude extension environment. Requires Python 3.8+.
 
 ### ⚡ Option 1: The One-Line Installer (Recommended)
 
@@ -80,7 +81,7 @@ python %USERPROFILE%\.claude\plugins\GunjanGrunge\tylor\install.py
 
 ### Step 3: Verify
 
-1. Restart your Claude, GitHub Copilot, or Antigravity client completely (close the terminal/app and reopen it).
+1. Restart your Claude, Codex, GitHub Copilot, or Antigravity client completely (close the terminal/app and reopen it).
 2. Type `/help-agent101` in your prompt (or use Copilot Chat / `/mcp show`).
 3. If you see the capability index, Tylor is fully operational!
 
@@ -147,12 +148,16 @@ This layer applies across the plugin, regardless of which thread or persona is a
 
 ## 🎭 Sub-Agents & Personas
 
-Tylor comes pre-equipped with specialist sub-agents. Claude will **automatically invoke** these personas based on the nature of your query—no manual intervention required.
+Tylor comes pre-equipped with specialist sub-agents. The harness will **automatically invoke** these personas based on the nature of your query—no manual intervention required.
 
 * **`cto`**: System architecture, tradeoffs, platform strategy, and engineering standards.
 * **`code_agent`**: Senior software engineer laser-focused on shipping robust code and tests.
 * **`analyst`**: Market research, data synthesis, and technical decision support.
 * **`ceo`**: Product strategy, roadmap prioritization, and stakeholder framing.
+
+### Codex users
+
+The installer patches `~/.codex/config.toml` with an `agent101` stdio MCP server entry. Tylor installs its Python dependencies, including `claude-agent-sdk`, into `~/.tylor/venv`; Codex acts as the MCP client, while Tylor's internal orchestration harness uses the Agent SDK runtime to spawn role agents.
 
 ---
 

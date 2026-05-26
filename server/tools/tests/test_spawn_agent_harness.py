@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sys
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -293,3 +294,51 @@ def test_spawn_agent_marks_failed_when_output_persistence_fails():
     assert result["output_sk"] is None
     assert final_state["Status"] == "failed"
     assert "db down" in final_state["Error"]
+
+
+@pytest.mark.asyncio
+async def test_run_with_agents_wires_auto_spawn_agent_tool():
+    """The supervisor harness exposes Agent and reports sub-agent starts."""
+    mock_sdk = MagicMock()
+    captured = {}
+
+    async def fake_query(prompt, options):
+        captured["allowed_tools"] = options.allowed_tools
+        captured["agents"] = options.agents
+        yield SimpleNamespace(
+            content=[
+                SimpleNamespace(
+                    name="Agent",
+                    input={
+                        "subagent_type": "reviewer",
+                        "description": "review the harness code",
+                    },
+                )
+            ]
+        )
+
+    def fake_agent_definition(**kwargs):
+        return SimpleNamespace(**kwargs)
+
+    mock_sdk.query = fake_query
+    mock_sdk.ClaudeAgentOptions = MagicMock(side_effect=lambda **kw: SimpleNamespace(**kw))
+    mock_sdk.AgentDefinition = MagicMock(side_effect=fake_agent_definition)
+
+    with patch.dict(sys.modules, {"claude_agent_sdk": mock_sdk}):
+        from importlib import reload
+        import server.tools.harness as harness_mod
+        reload(harness_mod)
+
+        chunks = []
+        async for chunk in harness_mod.run_with_agents(
+            message="review the harness code",
+            thread_id=VALID_THREAD_ID,
+        ):
+            chunks.append(chunk)
+
+    output = "".join(chunks)
+    assert "Agent" in captured["allowed_tools"]
+    assert {"researcher", "implementer", "reviewer", "planner", "drafter"} <= set(captured["agents"])
+    assert "[agent: reviewer #1] starting" in output
+    assert "[supervisor] complete" in output
+    assert "1 agent ran" in output

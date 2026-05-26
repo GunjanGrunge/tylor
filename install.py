@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -103,6 +104,10 @@ def antigravity_configs() -> list[Path]:
     """Antigravity agent config file locations."""
     return [Path.home() / ".gemini" / "antigravity" / "mcp_config.json"]
 
+def codex_config() -> Path:
+    """Codex CLI / IDE extension config file location."""
+    return Path.home() / ".codex" / "config.toml"
+
 
 # ── Python / venv setup ───────────────────────────────────────────────────────
 
@@ -160,6 +165,34 @@ def mcp_server_entry(python_path: Path) -> dict:
         "args":    ["-m", "server.main"],
         "env":     {"PYTHONPATH": cwd},
     }
+
+
+def _toml_string(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _toml_array(values: list[str]) -> str:
+    return "[" + ", ".join(_toml_string(value) for value in values) + "]"
+
+
+def _toml_inline_table(values: dict[str, str]) -> str:
+    pairs = [f"{key} = {_toml_string(value)}" for key, value in values.items()]
+    return "{ " + ", ".join(pairs) + " }"
+
+
+def codex_mcp_server_block(python_path: Path) -> str:
+    """Build Codex's TOML MCP server entry for agent101."""
+    entry = mcp_server_entry(python_path)
+    return "\n".join([
+        "[mcp_servers.agent101]",
+        'type = "stdio"',
+        "enabled = true",
+        f"command = {_toml_string(str(entry['command']))}",
+        f"args = {_toml_array(list(entry['args']))}",
+        f"cwd = {_toml_string(PLUGIN_DIR.as_posix())}",
+        f"env = {_toml_inline_table(entry['env'])}",
+        "",
+    ])
 
 
 # ── Hooks entries ─────────────────────────────────────────────────────────────
@@ -239,6 +272,44 @@ def patch_config(config_path: Path, python_path: Path, is_desktop: bool = False)
         return True
     except OSError as e:
         fail(f"Could not write {config_path}: {e}")
+        tmp.unlink(missing_ok=True)
+        return False
+
+
+_CODEX_AGENT101_BLOCK_RE = re.compile(
+    r"(?ms)^\[mcp_servers\.agent101\]\n.*?(?=^\[|\Z)"
+)
+
+
+def patch_codex_config(config_path: Path, python_path: Path) -> bool:
+    """
+    Patch Codex's TOML config with the agent101 MCP server.
+    Preserves unrelated user settings and replaces only the agent101 MCP block.
+    """
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    current = ""
+    if config_path.exists():
+        try:
+            current = config_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            fail(f"Could not read {config_path}: {exc}")
+            return False
+
+    block = codex_mcp_server_block(python_path)
+    if _CODEX_AGENT101_BLOCK_RE.search(current):
+        updated = _CODEX_AGENT101_BLOCK_RE.sub(block, current).rstrip() + "\n"
+    else:
+        updated = current.rstrip()
+        updated = (updated + "\n\n" if updated else "") + block
+
+    tmp = config_path.with_suffix(".tmp")
+    try:
+        tmp.write_text(updated, encoding="utf-8")
+        os.replace(tmp, config_path)
+        return True
+    except OSError as exc:
+        fail(f"Could not write {config_path}: {exc}")
         tmp.unlink(missing_ok=True)
         return False
 
@@ -379,18 +450,26 @@ def main() -> None:
         else:
             fail(f"Failed to patch {cfg_path}")
 
-    # Step 7: Bundle BMAD silently
+    # Step 7: Patch Codex
+    header("Patching Codex")
+    codex_path = codex_config()
+    if patch_codex_config(codex_path, python_path):
+        ok(f"Patched {codex_path}")
+    else:
+        fail(f"Failed to patch {codex_path}")
+
+    # Step 8: Bundle BMAD silently
     header("Bundling BMAD (silent)")
     _bundle_bmad()
 
-    # Step 8: Validate
+    # Step 9: Validate
     header("Validating")
     validate(python_path)
 
-    # Step 9: Done
+    # Step 10: Done
     print(f"\n{BOLD}{GREEN}  ✓ Tylor installed successfully!{RESET}\n")
     print("  Next steps:")
-    print("  1. Restart Claude Code / Claude Desktop / VSCode")
+    print("  1. Restart Claude Code / Claude Desktop / VSCode / Codex")
     print("  2. Type /help-agent101 to see all commands")
     if use_dynamo:
         print(f"  3. Add AWS credentials to {PLUGIN_DIR / 'server' / '.env'}")
